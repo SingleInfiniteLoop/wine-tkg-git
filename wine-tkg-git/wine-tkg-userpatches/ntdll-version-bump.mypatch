@@ -1,0 +1,17 @@
+--- a/dlls/ntdll/version.rc	2022-03-17 08:11:00.000000000 +0300
++++ b/dlls/ntdll/version.rc	2022-08-05 19:40:31.466113628 +0300
+@@ -18,9 +18,9 @@
+ 
+ #define WINE_FILEDESCRIPTION_STR "Wine ntdll"
+ #define WINE_FILENAME_STR "ntdll.dll"
+-#define WINE_FILEVERSION 6,1,7601,24059
+-#define WINE_FILEVERSION_STR "6.1.7601.24059"
+-#define WINE_PRODUCTVERSION 6,1,7601,24059
+-#define WINE_PRODUCTVERSION_STR "6.1.7601.24059"
++#define WINE_FILEVERSION 6,1,7601,24545
++#define WINE_FILEVERSION_STR "6.1.7601.24545"
++#define WINE_PRODUCTVERSION 6,1,7601,24545
++#define WINE_PRODUCTVERSION_STR "6.1.7601.24545"
+ 
+ #include "wine/wine_common_ver.rc"
+
