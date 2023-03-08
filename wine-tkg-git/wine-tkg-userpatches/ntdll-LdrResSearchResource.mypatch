@@ -1,0 +1,109 @@
+--- a/dlls/ntdll/resource.c	2022-03-17 08:11:00.000000000 +0300
++++ b/dlls/ntdll/resource.c	2022-08-04 19:18:17.235731874 +0300
+@@ -379,6 +379,85 @@
+ #endif
+ 
+ /**********************************************************************
++ *	LdrResSearchResource  (NTDLL.@)
++ */
++NTSTATUS WINAPI LdrResSearchResource( PVOID file,
++                                      ULONG_PTR *res_ids,
++                                      ULONG res_id_size,
++                                      ULONG flags,
++                                      LPVOID *ptr,
++                                      ULONG_PTR *size,
++                                      USHORT *found_language,
++                                      ULONG *found_language_size )
++{
++    const IMAGE_RESOURCE_DATA_ENTRY *rsrc;
++    LDR_RESOURCE_INFO info;
++    NTSTATUS status;
++
++    if (flags)
++    {
++        FIXME("flags %u not implemented\n", flags);
++    }
++    if (res_id_size <= 3)
++    {
++        if ((res_id_size > 0) && !res_ids)
++        {
++            return STATUS_INVALID_PARAMETER;
++        }
++        info.Type = (res_id_size > 0) ? res_ids[0] : 0;
++        info.Name = (res_id_size > 1) ? res_ids[1] : 0;
++        info.Language = (res_id_size > 2) ? res_ids[2] : 0;
++        if ((status = LdrFindResource_U(file, &info, res_id_size, &rsrc))
++            != STATUS_SUCCESS)
++        {
++            return status;
++        }
++        if (res_id_size > 1)
++        {
++            if (size)
++            {
++                *size = 0UL;
++            }
++            if ((status = LdrAccessResource(file, rsrc, ptr, (ULONG *)size))
++                != STATUS_SUCCESS)
++            {
++                return status;
++            }
++            if (found_language)
++            {
++                FIXME("found_language: stub\n");
++                found_language[0] = (res_id_size > 2) ? (USHORT)res_ids[2] :
++                                    MAKELANGID(LANG_ENGLISH, SUBLANG_DEFAULT);
++                if (found_language_size)
++                {
++                    *found_language_size = 1;
++                }
++            }
++        }
++        else 
++        {
++            if (ptr)
++            {
++                *ptr = rsrc;
++                if (size)
++                {
++                    *size = sizeof(IMAGE_RESOURCE_DATA_ENTRY);
++                }
++            }
++            else if (size)
++            {
++                *size = 0;
++            }
++        }
++        return STATUS_SUCCESS;
++    }
++    else
++    {
++        return STATUS_INVALID_PARAMETER;
++    }
++}
++
++/**********************************************************************
+  *	RtlFindMessage  (NTDLL.@)
+  */
+ NTSTATUS WINAPI RtlFindMessage( HMODULE hmod, ULONG type, ULONG lang,
+--- a/dlls/ntdll/ntdll.spec	2022-03-17 08:11:00.000000000 +0300
++++ b/dlls/ntdll/ntdll.spec	2022-08-04 19:22:24.323829463 +0300
+@@ -87,6 +87,7 @@
+ # @ stub LdrFindResourceEx_U
+ @ stdcall LdrFindResource_U(long ptr long ptr)
+ @ stub LdrFlushAlternateResourceModules
++@ stdcall LdrResSearchResource(ptr ptr long long ptr ptr ptr ptr)
+ @ stdcall LdrGetDllDirectory(ptr)
+ @ stdcall LdrGetDllFullName(long ptr)
+ @ stdcall LdrGetDllHandle(wstr long ptr ptr)
+--- a/dlls/ntoskrnl.exe/ntoskrnl.exe.spec	2022-03-17 08:11:00.000000000 +0300
++++ b/dlls/ntoskrnl.exe/ntoskrnl.exe.spec	2022-08-04 19:22:24.323829463 +0300
+@@ -682,6 +682,7 @@
+ @ stub LdrEnumResources
+ @ stdcall LdrFindResourceDirectory_U(long ptr long ptr)
+ @ stdcall LdrFindResource_U(long ptr long ptr)
++@ stdcall LdrResSearchResource(ptr ptr long long ptr ptr ptr ptr)
+ @ stub LpcPortObjectType
+ @ stub LpcRequestPort
+ @ stub LpcRequestWaitReplyPort
+
