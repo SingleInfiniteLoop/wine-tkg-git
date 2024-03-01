@@ -1,0 +1,269 @@
+diff --git a/dlls/kernel32/kernel32.spec b/dlls/kernel32/kernel32.spec
+index a7b11cca957..469a6f647e8 100644
+--- a/dlls/kernel32/kernel32.spec
++++ b/dlls/kernel32/kernel32.spec
+@@ -932,10 +932,10 @@
+ @ stdcall GlobalUnfix(long)
+ @ stdcall GlobalUnlock(long)
+ @ stdcall GlobalWire(long)
+-@ stub Heap32First
++@ stdcall Heap32First(ptr long ptr)
+ @ stdcall Heap32ListFirst(long ptr)
+-@ stub Heap32ListNext
+-@ stub Heap32Next
++@ stdcall Heap32ListNext(long ptr)
++@ stdcall Heap32Next(ptr)
+ @ stdcall HeapAlloc(long long long) NTDLL.RtlAllocateHeap
+ @ stdcall -import HeapCompact(long long)
+ @ stdcall HeapCreate(long long long)
+diff --git a/dlls/kernel32/toolhelp.c b/dlls/kernel32/toolhelp.c
+index 5e1ec84d100..080c5ed7459 100644
+--- a/dlls/kernel32/toolhelp.c
++++ b/dlls/kernel32/toolhelp.c
+@@ -49,6 +49,9 @@ struct snapshot
+     int         module_count;
+     int         module_pos;
+     int         module_offset;
++    int         heap_count;
++    int         heap_pos;
++    int         heap_offset;
+     char        data[1];
+ };
+ 
+@@ -280,6 +283,63 @@ static void fill_thread( struct snapshot* snap, ULONG* offset, LPVOID info, ULON
+     *offset += num * sizeof(THREADENTRY32);
+ }
+ 
++static BOOL fetch_heap_list( DWORD process, DWORD flags, PHANDLE* phlist, ULONG* num )
++{
++    ULONG   hnum;
++
++    *num = 0;
++    if (!(flags & TH32CS_SNAPHEAPLIST)) return TRUE;
++    *phlist = NULL;
++    hnum = RtlGetProcessHeaps( 0, NULL );
++    if (hnum > 0)
++    {
++        *phlist = HeapAlloc( GetProcessHeap(), 0, sizeof(HANDLE) * hnum );
++        {
++            SetLastError( ERROR_OUTOFMEMORY );
++            return FALSE;
++        }
++        hnum = RtlGetProcessHeaps( hnum, *phlist );
++    }
++    if (hnum > 0)
++    {
++        *num = hnum;
++        return TRUE;
++    }
++    else
++    {
++        if (*phlist)
++        {
++            HeapFree( GetProcessHeap(), 0, *phlist );
++        }
++        return FALSE;
++    }
++}
++
++static void fill_heap_list( struct snapshot* snap, ULONG* offset, DWORD process, LPVOID info, ULONG num )
++{
++    HEAPLIST32*                 hl_entry;
++    PHANDLE                     hlist;
++    ULONG                       i;
++
++    snap->heap_count = num;
++    snap->heap_pos = 0;
++    if (!num) return;
++    snap->heap_offset = *offset;
++
++    hl_entry = (HEAPLIST32*)&snap->data[*offset];
++    hlist = (PHANDLE)info;
++    for (i = 0; i < num; i++)
++    {
++        hl_entry->dwSize = sizeof(HEAPLIST32);
++        hl_entry->th32ProcessID = process;
++        hl_entry->th32HeapID = HandleToUlong(hlist[i]);
++        hl_entry->dwFlags = 0;
++        hl_entry++;
++    }
++    ((HEAPLIST32*)&snap->data[*offset])->dwFlags = HF32_DEFAULT;
++    *offset += num * sizeof(HEAPLIST32);
++}
++
+ /***********************************************************************
+  *           CreateToolhelp32Snapshot			(KERNEL32.@)
+  */
+@@ -287,11 +347,13 @@ HANDLE WINAPI CreateToolhelp32Snapshot( DWORD flags, DWORD process )
+ {
+     SYSTEM_PROCESS_INFORMATION* spi = NULL;
+     LDR_DATA_TABLE_ENTRY *mod = NULL;
+-    ULONG               num_pcs, num_thd, num_mod;
++    ULONG               num_pcs, num_thd, num_mod, num_heap;
+     HANDLE              hSnapShot = 0;
++    PHANDLE             hlist = 0;
+ 
+     TRACE("%lx,%lx\n", flags, process );
+-    if (!(flags & (TH32CS_SNAPPROCESS|TH32CS_SNAPTHREAD|TH32CS_SNAPMODULE)))
++    if (!(flags & (TH32CS_SNAPPROCESS | TH32CS_SNAPTHREAD | \
++                   TH32CS_SNAPMODULE | TH32CS_SNAPHEAPLIST)))
+     {
+         FIXME("flags %lx not implemented\n", flags );
+         SetLastError( ERROR_CALL_NOT_IMPLEMENTED );
+@@ -299,7 +361,8 @@ HANDLE WINAPI CreateToolhelp32Snapshot( DWORD flags, DWORD process )
+     }
+ 
+     if (fetch_module( process, flags, &mod, &num_mod ) &&
+-        fetch_process_thread( flags, &spi, &num_pcs, &num_thd ))
++        fetch_process_thread( flags, &spi, &num_pcs, &num_thd ) &&
++        fetch_heap_list( process, flags, &hlist, &num_heap ))
+     {
+         ULONG sect_size;
+         struct snapshot*snap;
+@@ -307,10 +370,10 @@ HANDLE WINAPI CreateToolhelp32Snapshot( DWORD flags, DWORD process )
+ 
+         /* create & fill the snapshot section */
+         sect_size = sizeof(struct snapshot) - 1; /* for last data[1] */
+-        if (flags & TH32CS_SNAPMODULE)  sect_size += num_mod * sizeof(MODULEENTRY32W);
+-        if (flags & TH32CS_SNAPPROCESS) sect_size += num_pcs * sizeof(PROCESSENTRY32W);
+-        if (flags & TH32CS_SNAPTHREAD)  sect_size += num_thd * sizeof(THREADENTRY32);
+-        if (flags & TH32CS_SNAPHEAPLIST)FIXME("Unimplemented: heap list snapshot\n");
++        if (flags & TH32CS_SNAPMODULE)   sect_size += num_mod * sizeof(MODULEENTRY32W);
++        if (flags & TH32CS_SNAPPROCESS)  sect_size += num_pcs * sizeof(PROCESSENTRY32W);
++        if (flags & TH32CS_SNAPTHREAD)   sect_size += num_thd * sizeof(THREADENTRY32);
++        if (flags & TH32CS_SNAPHEAPLIST) sect_size += num_heap * sizeof(HEAPLIST32);
+ 
+         sa.bInheritHandle = (flags & TH32CS_INHERIT) != 0;
+         sa.lpSecurityDescriptor = NULL;
+@@ -325,6 +388,7 @@ HANDLE WINAPI CreateToolhelp32Snapshot( DWORD flags, DWORD process )
+             fill_module( snap, &offset, process, mod, num_mod );
+             fill_process( snap, &offset, spi, num_pcs );
+             fill_thread( snap, &offset, spi, num_thd );
++            fill_heap_list( snap, &offset, process, hlist, num_heap );
+             UnmapViewOfFile( snap );
+         }
+     }
+@@ -336,6 +400,10 @@ HANDLE WINAPI CreateToolhelp32Snapshot( DWORD flags, DWORD process )
+     }
+     HeapFree( GetProcessHeap(), 0, mod );
+     HeapFree( GetProcessHeap(), 0, spi );
++    if (num_heap)
++    {
++        HeapFree( GetProcessHeap(), 0, hlist );
++    }
+ 
+     if (!hSnapShot) return INVALID_HANDLE_VALUE;
+     return hSnapShot;
+@@ -586,14 +654,110 @@ BOOL WINAPI Module32Next(HANDLE hSnapshot, LPMODULEENTRY32 lpme)
+     return module_nextA( hSnapshot, lpme, FALSE );
+ }
+ 
++static BOOL next_heap_list( HANDLE hSnapShot, LPHEAPLIST32 lphl, BOOL first )
++{
++    struct snapshot*    snap;
++    BOOL                ret = FALSE;
++
++    if (lphl->dwSize < sizeof(LPHEAPLIST32))
++    {
++        SetLastError( ERROR_INSUFFICIENT_BUFFER );
++        WARN("Result buffer too small (%lu)\n", (DWORD)lphl->dwSize);
++        return FALSE;
++    }
++    if ((snap = MapViewOfFile( hSnapShot, FILE_MAP_ALL_ACCESS, 0, 0, 0 )))
++    {
++        if (first) snap->heap_pos = 0;
++        if (snap->heap_pos < snap->heap_count)
++        {
++            LPHEAPLIST32 hl = (LPHEAPLIST32)&snap->data[snap->heap_offset];
++            *lphl = hl[snap->heap_pos++];
++            ret = TRUE;
++        }
++        else SetLastError( ERROR_NO_MORE_FILES );
++        UnmapViewOfFile( snap );
++    }
++    return ret;
++}
++
++static BOOL next_heap( DWORD pid, ULONG_PTR hid, LPHEAPENTRY32 lphe, BOOL first )
++{
++    NTSTATUS status;
++    PROCESS_HEAP_ENTRY phe;
++    BOOL ret = FALSE;
++
++    if (lphe->dwSize < sizeof(HEAPENTRY32))
++    {
++        SetLastError( ERROR_INSUFFICIENT_BUFFER );
++        WARN("Result buffer too small (%lu)\n", (DWORD)lphe->dwSize);
++        return FALSE;
++    }
++    RtlSecureZeroMemory(&phe, sizeof(PROCESS_HEAP_ENTRY));
++    lphe->hHandle = UlongToHandle(hid);
++    phe.lpData = first ? NULL : (LPVOID)lphe->dwAddress;
++    status = RtlWalkHeap( lphe->hHandle, &phe );
++    if (status == STATUS_SUCCESS)
++    {
++        lphe->th32ProcessID = pid;
++        lphe->th32HeapID = hid;
++        lphe->dwLockCount = 0;
++        lphe->dwResvd = 0;
++        lphe->dwBlockSize = phe.cbData;
++        lphe->dwAddress = (ULONG_PTR)phe.lpData;
++        lphe->dwFlags = 0x04;
++        ret = TRUE;
++    }
++    else
++    {
++        SetLastError( (status == STATUS_NO_MORE_ENTRIES) ?
++                      ERROR_NO_MORE_FILES :
++                      RtlNtStatusToDosError( status ) );
++    }
++    return ret;
++}
++
+ /************************************************************************
+  *              Heap32ListFirst (KERNEL32.@)
+  *
+  */
+ BOOL WINAPI Heap32ListFirst(HANDLE hSnapshot, LPHEAPLIST32 lphl)
+ {
+-    FIXME(": stub\n");
+-    return FALSE;
++    return next_heap_list(hSnapshot, lphl, TRUE);
++}
++
++/************************************************************************
++ *              Heap32ListNext (KERNEL32.@)
++ *
++ */
++BOOL WINAPI Heap32ListNext(HANDLE hSnapshot, LPHEAPLIST32 lphl)
++{
++    return next_heap_list(hSnapshot, lphl, FALSE);
++}
++
++/************************************************************************
++ *              Heap32First (KERNEL32.@)
++ *
++ */
++BOOL WINAPI Heap32First(LPHEAPENTRY32 lphe, DWORD pid, ULONG_PTR hid)
++{
++    return next_heap(pid, hid, lphe, TRUE);
++}
++
++/************************************************************************
++ *              Heap32Next (KERNEL32.@)
++ *
++ */
++BOOL WINAPI Heap32Next(LPHEAPENTRY32 lphe)
++{
++    if (lphe)
++    {
++        return next_heap(lphe->th32ProcessID, lphe->th32HeapID, lphe, FALSE);
++    }
++    else
++    {
++        SetLastError( ERROR_INVALID_PARAMETER );
++        return FALSE;
++    }
+ }
+ 
+ /******************************************************************
