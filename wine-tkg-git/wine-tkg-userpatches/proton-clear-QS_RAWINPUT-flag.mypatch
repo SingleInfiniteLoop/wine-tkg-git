@@ -1,0 +1,17 @@
+diff --git a/server/queue.c b/server/queue.c
+index da1c4c87a60..70f278531c8 100644
+--- a/server/queue.c
++++ b/server/queue.c
+@@ -3845,6 +3845,12 @@ DECL_HANDLER(get_rawinput_buffer)
+             }
+         }
+ 
++        if ((msg->entry.next == &input->msg_list) ||
++            (&msg->entry == &input->msg_list))
++        {
++            clear_queue_bits( current->queue, QS_RAWINPUT );
++        }
++
+         if (!next_size)
+         {
+             if (count) next_size = sizeof(RAWINPUT);
