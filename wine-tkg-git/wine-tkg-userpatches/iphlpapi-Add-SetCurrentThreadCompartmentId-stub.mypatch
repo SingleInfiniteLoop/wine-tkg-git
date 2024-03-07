@@ -1,0 +1,29 @@
+diff --git a/dlls/iphlpapi/iphlpapi.spec b/dlls/iphlpapi/iphlpapi.spec
+index dcc15a2753e..facb52e0448 100644
+--- a/dlls/iphlpapi/iphlpapi.spec
++++ b/dlls/iphlpapi/iphlpapi.spec
+@@ -268,7 +268,7 @@
+ @ stdcall SendARP( long long ptr ptr )
+ @ stub SetAdapterIpAddress
+ @ stub SetBlockRoutes
+-#@ stub SetCurrentThreadCompartmentId
++@ stdcall SetCurrentThreadCompartmentId( long )
+ @ stdcall SetIfEntry( ptr )
+ @ stub SetIfEntryToStack
+ #@ stub SetIpForwardEntry2
+diff --git a/dlls/iphlpapi/iphlpapi_main.c b/dlls/iphlpapi/iphlpapi_main.c
+index 85048f7a026..c64dafdf6b6 100644
+--- a/dlls/iphlpapi/iphlpapi_main.c
++++ b/dlls/iphlpapi/iphlpapi_main.c
+@@ -4824,3 +4824,11 @@ NET_IF_COMPARTMENT_ID WINAPI GetCurrentThreadCompartmentId( void )
+     FIXME( "stub\n" );
+     return NET_IF_COMPARTMENT_ID_PRIMARY;
+ }
++
++/***********************************************************************
++ *    SetCurrentThreadCompartmentId (IPHLPAPI.@)
++ */
++void WINAPI SetCurrentThreadCompartmentId( NET_IF_COMPARTMENT_ID id )
++{
++    FIXME( "(%u) stub\n", id );
++}
