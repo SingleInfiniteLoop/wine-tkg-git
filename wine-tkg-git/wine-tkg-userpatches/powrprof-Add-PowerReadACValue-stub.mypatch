@@ -1,0 +1,29 @@
+diff --git a/dlls/powrprof/powrprof.c b/dlls/powrprof/powrprof.c
+index dcc7126b920..95d90162b45 100644
+--- a/dlls/powrprof/powrprof.c
++++ b/dlls/powrprof/powrprof.c
+@@ -296,6 +296,12 @@ DWORD WINAPI PowerSetActiveScheme(HKEY UserRootPowerKey, GUID *polguid)
+    return ERROR_SUCCESS;
+ }
+ 
++DWORD WINAPI PowerReadACValue(HKEY RootPowerKey, const GUID *Scheme, const GUID *SubGroup, const GUID *PowerSettings, PULONG Type, PUCHAR Buffer, DWORD *BufferSize)
++{
++   FIXME("(%p,%s,%s,%s,%p,%p,%p) stub!\n", RootPowerKey, debugstr_guid(Scheme), debugstr_guid(SubGroup), debugstr_guid(PowerSettings), Type, Buffer, BufferSize);
++   return ERROR_CALL_NOT_IMPLEMENTED;
++}
++
+ DWORD WINAPI PowerReadDCValue(HKEY RootPowerKey, const GUID *Scheme, const GUID *SubGroup, const GUID *PowerSettings, PULONG Type, PUCHAR Buffer, DWORD *BufferSize)
+ {
+    FIXME("(%p,%s,%s,%s,%p,%p,%p) stub!\n", RootPowerKey, debugstr_guid(Scheme), debugstr_guid(SubGroup), debugstr_guid(PowerSettings), Type, Buffer, BufferSize);
+diff --git a/dlls/powrprof/powrprof.spec b/dlls/powrprof/powrprof.spec
+index 95d28178729..06210a76d64 100644
+--- a/dlls/powrprof/powrprof.spec
++++ b/dlls/powrprof/powrprof.spec
+@@ -15,6 +15,7 @@
+ @ stdcall PowerEnumerate(long ptr ptr long long ptr ptr)
+ @ stdcall PowerGetActiveScheme (ptr ptr)
+ @ stdcall PowerSetActiveScheme (ptr ptr)
++@ stdcall PowerReadACValue (ptr ptr ptr ptr ptr ptr ptr)
+ @ stdcall PowerReadDCValue (ptr ptr ptr ptr ptr ptr ptr)
+ @ stdcall PowerReadFriendlyName (ptr ptr ptr ptr ptr ptr)
+ @ stdcall PowerRegisterSuspendResumeNotification(long ptr ptr)
