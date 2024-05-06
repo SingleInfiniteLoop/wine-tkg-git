@@ -1,0 +1,108 @@
+diff --git a/dlls/winevulkan/make_vulkan b/dlls/winevulkan/make_vulkan
+index ecc84b54a51..cfb71f8bec7 100755
+--- a/dlls/winevulkan/make_vulkan
++++ b/dlls/winevulkan/make_vulkan
+@@ -2485,7 +2485,18 @@ class StructConversionFunction(object):
+ 
+             body += "        default:\n"
+             if self.direction == Direction.INPUT:
+-                body += ident + "FIXME(\"Unhandled sType %u.\\n\", in_header->sType);\n"
++                body += ident + "if ((in_header->sType >> 16) == 0x7ead)\n"
++                body += ident + "{\n"
++                body += ident + "    VkBaseOutStructure *out_ext = conversion_context_alloc(ctx, 32);\n";
++                body += ident + "    memcpy(out_ext, in_header, 32);\n";
++                body += ident + "    out_ext->pNext = NULL;\n";
++                body += ident + "    out_header->pNext = (void *)out_ext;\n";
++                body += ident + "    out_header = (void *)out_ext;\n";
++                body += ident + "}\n"
++                body += ident + "else\n"
++                body += ident + "{\n"
++                body += ident + "    FIXME(\"Unhandled sType %u.\\n\", in_header->sType);\n"
++                body += ident + "}\n"
+             body += "            break;\n"
+             body += "        }\n"
+             body += "    }\n"
+@@ -3145,6 +3156,28 @@ class VkGenerator(object):
+             f.write("typedef {0};\n".format(func.pfn(prefix="PFN", call_conv="VKAPI_PTR")))
+         f.write("\n")
+ 
++        f.write("typedef VkResult (WINAPI *PFN_native_vkCreateInstance)(const VkInstanceCreateInfo *, const VkAllocationCallbacks *, VkInstance *,\n")
++        f.write("                                                       void * (*)(VkInstance, const char *), void *);\n");
++        f.write("typedef VkResult (WINAPI *PFN_native_vkCreateDevice)(VkPhysicalDevice, const VkDeviceCreateInfo *, const VkAllocationCallbacks *, VkDevice *,\n");
++        f.write("                                                     void * (*)(VkInstance, const char *), void *);\n\n");
++        f.write("typedef struct VkCreateInfoWineDeviceCallback {\n");
++        f.write("    VkStructureType             sType;\n");
++        f.write("    const void*                 pNext;\n");
++        f.write("    PFN_native_vkCreateDevice   native_create_callback;\n");
++        f.write("    void*                       context;\n");
++        f.write("} VkCreateInfoWineDeviceCallback;\n");
++
++        f.write("#define VK_STRUCTURE_TYPE_CREATE_INFO_WINE_DEVICE_CALLBACK 2125312001\n");
++
++        f.write("typedef struct VkCreateInfoWineInstanceCallback {\n");
++        f.write("    VkStructureType             sType;\n");
++        f.write("    const void*                 pNext;\n");
++        f.write("    PFN_native_vkCreateInstance native_create_callback;\n");
++        f.write("    void*                       context;\n");
++        f.write("} VkCreateInfoWineInstanceCallback;\n");
++
++        f.write("#define VK_STRUCTURE_TYPE_CREATE_INFO_WINE_INSTANCE_CALLBACK 2125312002\n");
++
+         f.write("#ifndef VK_NO_PROTOTYPES\n")
+         for func in self.registry.funcs.values():
+             if not func.is_required():
+diff --git a/dlls/winevulkan/vulkan.c b/dlls/winevulkan/vulkan.c
+index 7b550857898..3611ac4abd0 100644
+--- a/dlls/winevulkan/vulkan.c
++++ b/dlls/winevulkan/vulkan.c
+@@ -543,8 +543,11 @@ static VkResult wine_vk_device_convert_create_info(struct wine_phys_dev *phys_de
+     unsigned int i, extra_count = 0, extensions_count = src->enabledExtensionCount;
+     char **extra_xr_extensions;
+     unsigned int count, o = 0, append_xr = 0;
++    VkBaseOutStructure *header;
+ 
+     *dst = *src;
++    if ((header = (VkBaseOutStructure *)dst->pNext) && header->sType == VK_STRUCTURE_TYPE_CREATE_INFO_WINE_DEVICE_CALLBACK)
++        dst->pNext = header->pNext;
+ 
+     /* Should be filtered out by loader as ICDs don't support layers. */
+     dst->enabledLayerCount = 0;
+@@ -876,6 +879,10 @@ VkResult wine_vkCreateDevice(VkPhysicalDevice phys_dev_handle, const VkDeviceCre
+     unsigned int queue_count, i;
+     VkResult res;
+ 
++    PFN_native_vkCreateDevice native_create_device = NULL;
++    void *native_create_device_context = NULL;
++    VkCreateInfoWineDeviceCallback *callback;
++
+     if (allocator)
+         FIXME("Support for allocation callbacks not implemented yet\n");
+ 
+@@ -899,11 +906,25 @@ VkResult wine_vkCreateDevice(VkPhysicalDevice phys_dev_handle, const VkDeviceCre
+ 
+     object->phys_dev = phys_dev;
+ 
++    if ((callback = (VkCreateInfoWineDeviceCallback *)create_info->pNext)
++            && callback->sType == VK_STRUCTURE_TYPE_CREATE_INFO_WINE_DEVICE_CALLBACK)
++    {
++        native_create_device = callback->native_create_callback;
++        native_create_device_context = callback->context;
++    }
++
+     init_conversion_context(&ctx);
+     res = wine_vk_device_convert_create_info(phys_dev, &ctx, create_info, &create_info_host);
+     if (res == VK_SUCCESS)
+-        res = instance->funcs.p_vkCreateDevice(phys_dev->host_physical_device, &create_info_host,
+-                                               NULL /* allocator */, &object->host_device);
++    {
++        if (native_create_device)
++            res = native_create_device(phys_dev->host_physical_device,
++                    &create_info_host, NULL /* allocator */, &object->host_device,
++                    vk_funcs->p_vkGetInstanceProcAddr, native_create_device_context);
++        else
++            res = instance->funcs.p_vkCreateDevice(phys_dev->host_physical_device,
++                    &create_info_host, NULL /* allocator */, &object->host_device);
++    }
+     free_conversion_context(&ctx);
+     if (res != VK_SUCCESS)
+     {
