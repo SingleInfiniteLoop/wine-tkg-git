@@ -1,0 +1,208 @@
+diff --git a/dlls/winegstreamer/gst_private.h b/dlls/winegstreamer/gst_private.h
+index 811f04b9539..1ff9b287d21 100644
+--- a/dlls/winegstreamer/gst_private.h
++++ b/dlls/winegstreamer/gst_private.h
+@@ -49,7 +49,7 @@ HRESULT wg_sample_queue_create(struct wg_sample_queue **out)
+ void wg_sample_queue_destroy(struct wg_sample_queue *queue);
+ void wg_sample_queue_flush(struct wg_sample_queue *queue, bool all);
+ 
+-wg_parser_t wg_parser_create(bool output_compressed);
++wg_parser_t wg_parser_create(enum wg_parser_type type, bool output_compressed);
+ void wg_parser_destroy(wg_parser_t parser);
+ 
+ HRESULT wg_parser_connect(wg_parser_t parser, uint64_t file_size, const WCHAR *uri);
+diff --git a/dlls/winegstreamer/main.c b/dlls/winegstreamer/main.c
+index ca8518ab3d0..a39293c8f9d 100644
+--- a/dlls/winegstreamer/main.c
++++ b/dlls/winegstreamer/main.c
+@@ -68,10 +68,11 @@ bool array_reserve(void **elements
+     return TRUE;
+ }
+ 
+-wg_parser_t wg_parser_create(bool output_compressed)
++wg_parser_t wg_parser_create(enum wg_parser_type type, bool output_compressed)
+ {
+     struct wg_parser_create_params params =
+     {
++        .type = type,
+         .output_compressed = output_compressed,
+         .err_on = ERR_ON(quartz),
+         .warn_on = WARN_ON(quartz),
+diff --git a/dlls/winegstreamer/media_source.c b/dlls/winegstreamer/media_source.c
+index ca8518ab3d0..a39293c8f9d 100644
+--- a/dlls/winegstreamer/media_source.c
++++ b/dlls/winegstreamer/media_source.c
+@@ -36,6 +36,7 @@ struct object_context
+     IMFByteStream *stream;
+     UINT64 file_size;
+     WCHAR *url;
++    enum wg_parser_type type;
+ };
+ 
+ static struct object_context *impl_from_IUnknown(IUnknown *iface)
+@@ -95,7 +96,7 @@ static const IUnknownVtbl object_context_vtbl =
+ };
+ 
+ static HRESULT object_context_create(DWORD flags, IMFByteStream *stream, const WCHAR *url,
+-        QWORD file_size, IMFAsyncResult *result, IUnknown **out)
++        QWORD file_size, IMFAsyncResult *result, enum wg_parser_type type, IUnknown **out)
+ {
+     WCHAR *tmp_url = url ? wcsdup(url) : NULL;
+     struct object_context *context;
+@@ -113,6 +114,7 @@ static HRESULT object_context_create(DWORD flags, IMFByteStream *stream, const W
+     context->file_size = file_size;
+     context->url = tmp_url;
+     context->result = result;
++    context->type = type;
+     IMFAsyncResult_AddRef(context->result);
+ 
+     *out = &context->IUnknown_iface;
+@@ -1645,7 +1647,7 @@ static HRESULT media_source_create(struct object_context *context, IMFMediaSourc
+     if (FAILED(hr = MFAllocateWorkQueue(&object->async_commands_queue)))
+         goto fail;
+ 
+-    if (!(parser = wg_parser_create(FALSE)))
++    if (!(parser = wg_parser_create(context->type, FALSE)))
+     {
+         hr = E_OUTOFMEMORY;
+         goto fail;
+@@ -1881,7 +1883,7 @@ static HRESULT WINAPI stream_handler_BeginCreateObject(IMFByteStreamHandler *ifa
+ 
+     if (FAILED(hr = MFCreateAsyncResult(NULL, callback, state, &result)))
+         return hr;
+-    if (FAILED(hr = object_context_create(flags, stream, url, file_size, result, &context)))
++    if (FAILED(hr = object_context_create(flags, stream, url, file_size, result, WG_PARSER_DECODEBIN, &context)))
+     {
+         IMFAsyncResult_Release(result);
+         return hr;
+diff --git a/dlls/winegstreamer/quartz_parser.c b/dlls/winegstreamer/quartz_parser.c
+index 32eb6e1a4a0..f82f555f6b8 100644
+--- a/dlls/winegstreamer/quartz_parser.c
++++ b/dlls/winegstreamer/quartz_parser.c
+@@ -1659,7 +1659,7 @@ static HRESULT parser_create(BOOL output_compressed, struct parser **parser)
+     if (!(object = calloc(1, sizeof(*object))))
+         return E_OUTOFMEMORY;
+ 
+-    if (!(object->wg_parser = wg_parser_create(output_compressed)))
++    if (!(object->wg_parser = wg_parser_create(WG_PARSER_DECODEBIN, output_compressed)))
+     {
+         free(object);
+         return E_OUTOFMEMORY;
+diff --git a/dlls/winegstreamer/unixlib.h b/dlls/winegstreamer/unixlib.h
+index 4b15168ae62..2045f3b65ff 100644
+--- a/dlls/winegstreamer/unixlib.h
++++ b/dlls/winegstreamer/unixlib.h
+@@ -171,6 +171,12 @@ enum wg_parser_type
+ };
+ C_ASSERT(sizeof(struct wg_parser_buffer) == 32);
+ 
++enum wg_parser_type
++{
++    WG_PARSER_DECODEBIN,
++    WG_PARSER_URIDECODEBIN,
++};
++
+ typedef UINT64 wg_parser_t;
+ typedef UINT64 wg_parser_stream_t;
+ typedef UINT64 wg_transform_t;
+@@ -186,6 +192,7 @@ enum wg_parser_type
+ struct wg_parser_create_params
+ {
+     wg_parser_t parser;
++    enum wg_parser_type type;
+     UINT8 output_compressed;
+     UINT8 err_on;
+     UINT8 warn_on;
+diff --git a/dlls/winegstreamer/wg_parser.c b/dlls/winegstreamer/wg_parser.c
+index 5eb2f174a5a..7326cbc27cb 100644
+--- a/dlls/winegstreamer/wg_parser.c
++++ b/dlls/winegstreamer/wg_parser.c
+@@ -59,8 +59,12 @@ static BOOL decodebin_parser_init_gst(struct wg_parser *parser)
+ 
+ static BOOL decodebin_parser_init_gst(struct wg_parser *parser);
+ 
++typedef BOOL (*init_gst_cb)(struct wg_parser *parser);
++
+ struct wg_parser
+ {
++    init_gst_cb init_gst;
++
+     struct wg_parser_stream **streams;
+     unsigned int stream_count;
+ 
+@@ -1594,7 +1598,7 @@ static NTSTATUS wg_parser_connect(void *args)
+     parser->next_pull_offset = 0;
+     parser->error = false;
+ 
+-    if (!decodebin_parser_init_gst(parser))
++    if (!parser->init_gst(parser))
+         goto out;
+ 
+     gst_element_set_state(parser->container, GST_STATE_PAUSED);
+@@ -1802,9 +1806,36 @@ static BOOL decodebin_parser_init_gst(struct wg_parser *parser)
+     return TRUE;
+ }
+ 
++static BOOL uridecodebin_parser_init_gst(struct wg_parser *parser)
++{
++    GstElement *element;
++
++    if (!(element = create_element("uridecodebin", "base")))
++        return FALSE;
++
++    gst_bin_add(GST_BIN(parser->container), element);
++    parser->decodebin = element;
++
++    g_object_set(parser->decodebin, "uri", parser->uri, NULL);
++    g_signal_connect(element, "pad-added", G_CALLBACK(pad_added_cb), parser);
++    g_signal_connect(element, "pad-removed", G_CALLBACK(pad_removed_cb), parser);
++    g_signal_connect(element, "autoplug-select", G_CALLBACK(autoplug_select_cb), parser);
++    g_signal_connect(element, "no-more-pads", G_CALLBACK(no_more_pads_cb), parser);
++
++    pthread_mutex_lock(&parser->mutex);
++    parser->no_more_pads = false;
++    pthread_mutex_unlock(&parser->mutex);
++
++    return TRUE;
++}
+ 
+ static NTSTATUS wg_parser_create(void *args)
+ {
++    static const init_gst_cb init_funcs[] =
++    {
++        [WG_PARSER_DECODEBIN] = decodebin_parser_init_gst,
++        [WG_PARSER_URIDECODEBIN] = uridecodebin_parser_init_gst,
++    };
+     struct wg_parser_create_params *params = args;
+     struct wg_parser *parser;
+ 
+@@ -1815,6 +1848,7 @@ static NTSTATUS wg_parser_create(void *args)
+     pthread_cond_init(&parser->init_cond, NULL);
+     pthread_cond_init(&parser->read_cond, NULL);
+     pthread_cond_init(&parser->read_done_cond, NULL);
++    parser->init_gst = init_funcs[params->type];
+     parser->output_compressed = params->output_compressed;
+     parser->err_on = params->err_on;
+     parser->warn_on = params->warn_on;
+diff --git a/dlls/winegstreamer/wm_reader.c b/dlls/winegstreamer/wm_reader.c
+index 1eb9d2a245f..41735a85335 100644
+--- a/dlls/winegstreamer/wm_reader.c
++++ b/dlls/winegstreamer/wm_reader.c
+@@ -1452,7 +1452,7 @@ static HRESULT init_stream(struct wm_reader *reader)
+     HRESULT hr;
+     WORD i;
+ 
+-    if (!(wg_parser = wg_parser_create(FALSE)))
++    if (!(wg_parser = wg_parser_create(WG_PARSER_DECODEBIN, FALSE)))
+         return E_OUTOFMEMORY;
+ 
+     reader->wg_parser = wg_parser;
+@@ -1557,7 +1557,7 @@ static HRESULT reinit_stream(struct wm_reader *reader, bool read_compressed)
+     wg_parser_destroy(reader->wg_parser);
+     reader->wg_parser = 0;
+ 
+-    if (!(wg_parser = wg_parser_create(read_compressed)))
++    if (!(wg_parser = wg_parser_create(WG_PARSER_DECODEBIN, read_compressed)))
+         return E_OUTOFMEMORY;
+ 
+     reader->wg_parser = wg_parser;
