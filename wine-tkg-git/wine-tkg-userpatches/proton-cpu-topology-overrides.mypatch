@@ -207,9 +207,9 @@ index bf3d6c34f14..fc8165f2828 100644
          {
              unsigned int phys_core = 0;
 @@ -938,7 +1032,9 @@ static NTSTATUS create_logical_proc_info(void)
-                 continue;
-             }
-
+ 
+             if (i > 8 * sizeof(ULONG_PTR)) break;
+ 
 -            snprintf(name, sizeof(name), core_info, i, "physical_package_id");
 +            snprintf(name, sizeof(name), core_info, cpu_override.mapping.cpu_count ? cpu_override.mapping.host_cpu_id[i] : i,
 +                    "physical_package_id");
@@ -259,7 +259,7 @@ index bf3d6c34f14..fc8165f2828 100644
  
              if (!logical_proc_info_add_by_id( RelationProcessorCore, phys_core, thread_mask ))
              {
-@@ -985,36 +1096,40 @@ static NTSTATUS create_logical_proc_info(void)
+@@ -1141,38 +1230,42 @@ static NTSTATUS create_logical_proc_info(void)
                  return STATUS_NO_MEMORY;
              }
 
@@ -269,7 +269,7 @@ index bf3d6c34f14..fc8165f2828 100644
 +
              for (j = 0; j < 4; j++)
              {
-                 CACHE_DESCRIPTOR cache;
+                 CACHE_DESCRIPTOR cache = { .Associativity = 8, .LineSize = 64, .Type = CacheUnified, .Size = 64 * 1024 };
                  ULONG_PTR mask = 0;
  
 -                snprintf(name, sizeof(name), cache_info, i, j, "shared_cpu_map");
@@ -286,37 +286,39 @@ index bf3d6c34f14..fc8165f2828 100644
  
 -                snprintf(name, sizeof(name), cache_info, i, j, "ways_of_associativity");
 +                snprintf(name, sizeof(name), cache_info, cpu_id, j, "ways_of_associativity");
-                 f = fopen(name, "r");
-                 if(!f) continue;
-                 fscanf(f, "%u", &r);
-                 fclose(f);
-                 cache.Associativity = r;
+                 if ((f = fopen(name, "r")))
+                 {
+                     fscanf(f, "%u", &r);
+                     fclose(f);
+                     cache.Associativity = r;
+                 }
  
 -                snprintf(name, sizeof(name), cache_info, i, j, "coherency_line_size");
 +                snprintf(name, sizeof(name), cache_info, cpu_id, j, "coherency_line_size");
-                 f = fopen(name, "r");
-                 if(!f) continue;
-                 fscanf(f, "%u", &r);
-                 fclose(f);
-                 cache.LineSize = r;
+                 if ((f = fopen(name, "r")))
+                 {
+                     fscanf(f, "%u", &r);
+                     fclose(f);
+                     cache.LineSize = r;
+                 }
  
 -                snprintf(name, sizeof(name), cache_info, i, j, "size");
 +                snprintf(name, sizeof(name), cache_info, cpu_id, j, "size");
-                 f = fopen(name, "r");
-                 if(!f) continue;
-                 fscanf(f, "%u%c", &r, &op);
-@@ -1023,7 +1138,7 @@ static NTSTATUS create_logical_proc_info(void)
-                     WARN("unknown cache size %u%c\n", r, op);
-                 cache.Size = (op=='K' ? r*1024 : r);
+                 if ((f = fopen(name, "r")))
+                 {
+                     fscanf(f, "%u%c", &r, &op);
+@@ -1182,7 +1297,7 @@ static NTSTATUS create_logical_proc_info(void)
+                     cache.Size = (op=='K' ? r*1024 : r);
+                 }
  
 -                snprintf(name, sizeof(name), cache_info, i, j, "type");
 +                snprintf(name, sizeof(name), cache_info, cpu_id, j, "type");
-                 f = fopen(name, "r");
-                 if(!f) continue;
-                 fscanf(f, "%s", name);
-@@ -1035,6 +1150,19 @@ static NTSTATUS create_logical_proc_info(void)
-                 else
-                     cache.Type = CacheUnified;
+                 if ((f = fopen(name, "r")))
+                 {
+                     fscanf(f, "%s", name);
+@@ -1084,6 +1199,19 @@ static NTSTATUS create_logical_proc_info(void)
+                         cache.Type = CacheUnified;
+                 }
  
 +                if (cpu_override.mapping.cpu_count)
 +                {
@@ -334,7 +336,7 @@ index bf3d6c34f14..fc8165f2828 100644
                  if (!logical_proc_info_add_cache( mask, &cache ))
                  {
                      fclose(fcpu_list);
-@@ -1042,6 +1170,9 @@ static NTSTATUS create_logical_proc_info(void)
+@@ -1042,6 +1206,9 @@ static NTSTATUS create_logical_proc_info(void)
                  }
              }
          }
@@ -344,15 +346,15 @@ index bf3d6c34f14..fc8165f2828 100644
      }
      fclose(fcpu_list);
  
-@@ -1265,7 +1396,11 @@ void init_cpu_info(void)
+@@ -1141,7 +1429,11 @@ void init_cpu_info(void)
      num = 1;
      FIXME("Detecting the number of processors is not supported.\n");
  #endif
--    peb->NumberOfProcessors = num;
+-    peb->NumberOfProcessors = cpu_info.MaximumProcessors = num;
 +
 +    fill_cpu_override(num);
 +
-+    peb->NumberOfProcessors = cpu_override.mapping.cpu_count
++    peb->NumberOfProcessors = cpu_info.MaximumProcessors = cpu_override.mapping.cpu_count
 +            ? cpu_override.mapping.cpu_count : num;
      get_cpuinfo( &cpu_info );
      TRACE( "<- CPU arch %d, level %d, rev %d, features 0x%x\n",
@@ -432,8 +434,8 @@ index 97e074a5261..d1f9ab764f7 100644
  
  static const struct object_ops process_ops =
  {
-@@ -695,6 +696,7 @@ struct process *create_process( int fd, struct process *parent, int inherit_all,
-     memset( &process->image_info, 0, sizeof(process->image_info) );
+@@ -697,6 +698,7 @@ struct process *create_process( int fd, struct process *parent, int inherit_all,
+     list_init( &process->rawinput_entry );
      process->esync_fd        = -1;
      process->fsync_idx       = 0;
 +    process->cpu_override.cpu_count = 0;
