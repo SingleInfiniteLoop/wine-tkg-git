@@ -1,0 +1,85 @@
+diff --git a/dlls/pdh/pdh.spec b/dlls/pdh/pdh.spec
+index 3d51f6257ef..854b8004399 100644
+--- a/dlls/pdh/pdh.spec
++++ b/dlls/pdh/pdh.spec
+@@ -58,8 +58,8 @@
+ @ stub PdhGetDefaultPerfObjectHW
+ @ stub PdhGetDefaultPerfObjectW
+ @ stdcall PdhGetDllVersion(ptr)
+-@ stub PdhGetFormattedCounterArrayA
+-@ stub PdhGetFormattedCounterArrayW
++@ stdcall PdhGetFormattedCounterArrayA(ptr long ptr ptr ptr)
++@ stdcall PdhGetFormattedCounterArrayW(ptr long ptr ptr ptr)
+ @ stdcall PdhGetFormattedCounterValue(ptr long ptr ptr)
+ @ stub PdhGetLogFileSize
+ @ stdcall PdhGetLogFileTypeA(str ptr)
+diff --git a/dlls/pdh/pdh_main.c b/dlls/pdh/pdh_main.c
+index dec86a9962b..b764b0e921a 100644
+--- a/dlls/pdh/pdh_main.c
++++ b/dlls/pdh/pdh_main.c
+@@ -727,6 +727,42 @@ PDH_STATUS WINAPI PdhGetDllVersion( LPDWORD version )
+     return ERROR_SUCCESS;
+ }
+ 
++/***********************************************************************
++ *              PdhGetFormattedCounterArrayA   (PDH.@)
++ */
++PDH_STATUS WINAPI PdhGetFormattedCounterArrayA( PDH_HCOUNTER handle, DWORD format,
++                                                LPDWORD bufferSize, LPDWORD itemCount,
++                                                PPDH_FMT_COUNTERVALUE_ITEM_A item)
++{
++    FIXME("%p %lx %p %p %p: stub!\n", handle, format, bufferSize, itemCount, item);
++
++    if (!item || !itemCount || !bufferSize) return PDH_INVALID_ARGUMENT;
++    if (*bufferSize == 0)
++    {
++        *bufferSize = sizeof(PDH_FMT_COUNTERVALUE_ITEM_A);
++        return PDH_MORE_DATA;
++    }
++    return PDH_INVALID_ARGUMENT;
++}
++
++/***********************************************************************
++ *              PdhGetFormattedCounterArrayW   (PDH.@)
++ */
++PDH_STATUS WINAPI PdhGetFormattedCounterArrayW( PDH_HCOUNTER handle, DWORD format,
++                                                LPDWORD bufferSize, LPDWORD itemCount,
++                                                PPDH_FMT_COUNTERVALUE_ITEM_W item)
++{
++    FIXME("%p %lx %p %p %p: stub!\n", handle, format, bufferSize, itemCount, item);
++
++    if (!item || !itemCount || !bufferSize) return PDH_INVALID_ARGUMENT;
++    if (*bufferSize == 0)
++    {
++        *bufferSize = sizeof(PDH_FMT_COUNTERVALUE_ITEM_W);
++        return PDH_MORE_DATA;
++    }
++    return PDH_INVALID_ARGUMENT;
++}
++
+ /***********************************************************************
+  *              PdhGetFormattedCounterValue   (PDH.@)
+  */
+diff --git a/include/pdh.h b/include/pdh.h
+index 3d688bd8ded..24898c7cf64 100644
+--- a/include/pdh.h
++++ b/include/pdh.h
+@@ -80,6 +80,18 @@ typedef struct _PDH_FMT_COUNTERVALUE
+     } DUMMYUNIONNAME;
+ } PDH_FMT_COUNTERVALUE, *PPDH_FMT_COUNTERVALUE;
+ 
++typedef struct _PDH_FMT_COUNTERVALUE_ITEM_A
++{
++    LPSTR                name;
++    PDH_FMT_COUNTERVALUE value;
++} PDH_FMT_COUNTERVALUE_ITEM_A, *PPDH_FMT_COUNTERVALUE_ITEM_A;
++
++typedef struct _PDH_FMT_COUNTERVALUE_ITEM_W
++{
++    LPWSTR               name;
++    PDH_FMT_COUNTERVALUE value;
++} PDH_FMT_COUNTERVALUE_ITEM_W, *PPDH_FMT_COUNTERVALUE_ITEM_W;
++
+ typedef struct _PDH_RAW_COUNTER
+ {
+     DWORD    CStatus;
