@@ -44,27 +44,11 @@ index 85bc32a..04bd76a 100644
  @ stdcall RtlGetEnabledExtendedFeatures(int64)
  @ stdcall RtlGetExePath(wstr ptr)
  @ stdcall RtlGetExtendedContextLength(long ptr)
-@@ -898,7 +898,7 @@
- @ stdcall RtlNtStatusToDosError(long)
- @ stdcall RtlNtStatusToDosErrorNoTeb(long)
- @ stdcall RtlNumberGenericTableElements(ptr)
--# @ stub RtlNumberGenericTableElementsAvl
-+@ stdcall RtlNumberGenericTableElementsAvl(ptr)
- @ stdcall RtlNumberOfClearBits(ptr)
- @ stdcall RtlNumberOfSetBits(ptr)
- @ stdcall RtlOemStringToUnicodeSize(ptr)
 diff --git a/dlls/ntdll/rtl.c b/dlls/ntdll/rtl.c
 index 11067f4..d1b489b 100644
 --- a/dlls/ntdll/rtl.c
 +++ b/dlls/ntdll/rtl.c
-@@ -2164,15 +2164,52 @@
- void WINAPI RtlInitializeGenericTableAvl(PRTL_AVL_TABLE table, PRTL_AVL_COMPARE_ROUTINE compare,
-                                          PRTL_AVL_ALLOCATE_ROUTINE allocate, PRTL_AVL_FREE_ROUTINE free, void *context)
- {
--    FIXME("%p %p %p %p %p: stub\n", table, compare, allocate, free, context);
-+    FIXME("(%p, %p, %p, %p, %p): stub\n", table, compare, allocate, free, context);
- }
- 
+@@ -2170,8 +2170,36 @@
  /***********************************************************************
   *           RtlInsertElementGenericTableAvl  (NTDLL.@)
   */
@@ -101,15 +85,6 @@ index 11067f4..d1b489b 100644
 +{
 +    FIXME("(%p, %s): stub\n", table, restart ? "TRUE" : "FALSE");
 +    return NULL;
-+}
-+
-+/***********************************************************************
-+ *           RtlNumberGenericTableElementsAvl  (NTDLL.@)
-+ */
-+ULONG WINAPI RtlNumberGenericTableElementsAvl(PRTL_AVL_TABLE table)
-+{
-+    FIXME("(%p): stub\n", table);
-+    return 0UL;
  }
  
  /******************************************************************************
@@ -144,20 +119,11 @@ index d445c5a..4683dd3 100644
  @ stdcall RtlGetExtendedContextLength(long ptr)
  @ stdcall RtlGetExtendedContextLength2(long ptr int64)
  @ stub RtlGetFirstRange
-@@ -1215,7 +1215,7 @@
- @ stdcall RtlNtStatusToDosError(long)
- @ stdcall RtlNtStatusToDosErrorNoTeb(long)
- @ stdcall RtlNumberGenericTableElements(ptr)
--@ stub RtlNumberGenericTableElementsAvl
-+@ stdcall RtlNumberGenericTableElementsAvl(ptr)
- @ stdcall RtlNumberOfClearBits(ptr)
- @ stdcall RtlNumberOfSetBits(ptr)
- @ stub RtlOemStringToCountedUnicodeString
 diff --git a/include/ddk/ntddk.h b/include/ddk/ntddk.h
 index a6b2974..ba25ffd 100644
 --- a/include/ddk/ntddk.h
 +++ b/include/ddk/ntddk.h
-@@ -272,7 +272,11 @@ void *    WINAPI RtlGetElementGenericTable(PRTL_GENERIC_TABLE,ULONG);
+@@ -272,7 +272,10 @@ void *    WINAPI RtlGetElementGenericTable(PRTL_GENERIC_TABLE,ULONG);
  void *    WINAPI RtlGetElementGenericTable(PRTL_GENERIC_TABLE,ULONG);
  void      WINAPI RtlInitializeGenericTable(PRTL_GENERIC_TABLE,PRTL_GENERIC_COMPARE_ROUTINE,PRTL_GENERIC_ALLOCATE_ROUTINE,PRTL_GENERIC_FREE_ROUTINE,void *);
  void      WINAPI RtlInitializeGenericTableAvl(PRTL_AVL_TABLE,PRTL_AVL_COMPARE_ROUTINE,PRTL_AVL_ALLOCATE_ROUTINE, PRTL_AVL_FREE_ROUTINE,void *);
@@ -166,7 +132,6 @@ index a6b2974..ba25ffd 100644
 +void *    WINAPI RtlGetElementGenericTableAvl(PRTL_AVL_TABLE,ULONG);
 +BOOLEAN   WINAPI RtlDeleteElementGenericTableAvl(PRTL_AVL_TABLE,void *);
 +void *    WINAPI RtlEnumerateGenericTableAvl(PRTL_AVL_TABLE,BOOLEAN);
-+ULONG     WINAPI RtlNumberGenericTableElementsAvl(PRTL_AVL_TABLE);
  void *    WINAPI RtlLookupElementGenericTable(PRTL_GENERIC_TABLE,void *);
  void *    WINAPI RtlLookupElementGenericTableAvl(PRTL_AVL_TABLE,void *);
  void      WINAPI RtlMapGenericMask(ACCESS_MASK*,const GENERIC_MAPPING*);
