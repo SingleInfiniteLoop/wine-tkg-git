@@ -12,9 +12,12 @@ jobs:
       - uses: actions/checkout@v2
       - name: Compilation
         run: |
-          sudo dpkg --add-architecture i386 && sudo apt update
-          sudo apt install aptitude
+          sudo dpkg --add-architecture i386 && sudo apt-get update
+          sudo apt-get install aptitude
           sudo aptitude remove -y '?narrow(?installed,?version(deb.sury.org))'
+          wget http://archive.ubuntu.com/ubuntu/pool/main/p/pcre2/libpcre2-8-0_10.34-7ubuntu0.1_amd64.deb
+          sudo dpkg -i --force-all libpcre2-8-0_10.34-7ubuntu0.1_amd64.deb
+          sudo apt-get install --reinstall libpcre2-8-0:i386 libpcre2-posix2:i386
           cd wine-tkg-git 
           sed -i 's/distro=""/distro="debuntu"/' customization.cfg
           sed -i 's/_NOLIB32="false"/_NOLIB32="wow64"/' wine-tkg-profiles/advanced-customization.cfg
