@@ -3349,7 +3349,7 @@ index a78748b96ca..dccf43197cf 100644
 +
 +        if (do_fsync() && !is_signaled( queue ))
 +            fsync_clear( &queue->obj );
-
+ 
          if (do_esync() && !is_signaled( queue ))
              esync_clear( queue->esync_fd );
 @@ -3536,6 +3563,23 @@ DECL_HANDLER(esync_msgwait)
@@ -3744,13 +3744,13 @@ index 39d969f061d..d468782667a 100644
 @@ -576,6 +576,9 @@ NTSTATUS fsync_set_event( HANDLE handle, LONG *prev )
      if ((ret = get_object( handle, &obj ))) return ret;
      event = obj->shm;
-
+ 
 +    if (obj->type != FSYNC_MANUAL_EVENT && obj->type != FSYNC_AUTO_EVENT)
 +        return STATUS_OBJECT_TYPE_MISMATCH;
 +
      if (!(current = __atomic_exchange_n( &event->signaled, 1, __ATOMIC_SEQ_CST )))
          futex_wake( &event->signaled, INT_MAX );
-
+ 
 From 69afcb164ccf8d3ecd5e94cf79c1e31698e14e5c Mon Sep 17 00:00:00 2001
 From: Derek Lesho <dlesho@codeweavers.com>
 Date: Wed, 2 Feb 2022 17:02:44 -0500
@@ -3768,7 +3768,7 @@ index 55c5695964d..4663374653a 100644
 @@ -526,6 +526,9 @@ NTSTATUS esync_set_event( HANDLE handle )
      if ((ret = get_object( handle, &obj ))) return ret;
      event = obj->shm;
-
+ 
 +    if (obj->type != ESYNC_MANUAL_EVENT && obj->type != ESYNC_AUTO_EVENT)
 +        return STATUS_OBJECT_TYPE_MISMATCH;
 +
@@ -3785,13 +3785,13 @@ index 012795e410d..ba442324276 100644
          }
 +        if (do_fsync() && !is_signaled( queue ))
 +            fsync_clear( &queue->obj );
-
+ 
          if (do_esync() && !is_signaled( queue ))
              esync_clear( queue->esync_fd );
-@@ -3286,6 +3286,9 @@ DECL_HANDLER(get_message)
-
+@@ -2807,6 +2809,9 @@ DECL_HANDLER(get_message)
+ 
      set_error( STATUS_PENDING );  /* FIXME */
-
+ 
 +    if (do_fsync() && !is_signaled( queue ))
 +        fsync_clear( &queue->obj );
 +
