@@ -9,7 +9,7 @@ index 5e7503e895d..3376eaabe8d 100755
 -    "VK_KHR_external_semaphore_win32",
      # Relates to external_semaphore and needs type conversions in bitflags.
      "VK_KHR_shared_presentable_image", # Needs WSI work.
-     "VK_KHR_video_queue", # TODO Video extensions use separate headers + xml
+     "VK_KHR_video_encode_queue",
 @@ -113,7 +112,6 @@ UNSUPPORTED_EXTENSIONS = [
      "VK_EXT_physical_device_drm",
      "VK_GOOGLE_surfaceless_query",
@@ -19,7 +19,7 @@ index 5e7503e895d..3376eaabe8d 100755
  
      # Extensions which require callback handling
 @@ -174,7 +172,7 @@ FUNCTION_OVERRIDES = {
-     "vkDestroyInstance" : {"dispatch" : False},
+     "vkCreateDevice" : {"extra_param" : "client_ptr"},
      "vkGetPhysicalDeviceExternalBufferProperties" : {"dispatch" : True},
      "vkGetPhysicalDeviceExternalFenceProperties" : {"dispatch" : False},
 -    "vkGetPhysicalDeviceExternalSemaphoreProperties" : {"dispatch" : False},
@@ -104,8 +104,8 @@ index 3f8f9ab64f0..2ff23e0b98d 100644
                  new_extensions[o++] = src->ppEnabledExtensionNames[i];
          }
 @@ -1649,22 +1659,69 @@ VkResult wine_vkGetPhysicalDeviceCalibrateableTimeDomainsEXT(VkPhysicalDevice ha
-     return res;
- }
+ 
+
  
 -void wine_vkGetPhysicalDeviceExternalSemaphoreProperties(VkPhysicalDevice phys_dev,
 +static inline void wine_vk_normalize_semaphore_handle_types_win(VkExternalSemaphoreHandleTypeFlags *types)
@@ -180,7 +180,7 @@ index 3f8f9ab64f0..2ff23e0b98d 100644
 +    wine_vk_get_physical_device_external_semaphore_properties(phys_dev, phys_dev->instance->funcs.p_vkGetPhysicalDeviceExternalSemaphorePropertiesKHR, info, properties);
  }
  
- /*
+ VkResult wine_vkCreateWin32SurfaceKHR(VkInstance handle, const VkWin32SurfaceCreateInfoKHR *create_info,
 @@ -3434,6 +3491,10 @@ NTSTATUS vk_is_available_device_function(void *arg)
      struct wine_device *device = wine_device_from_handle(params->device);
      if (!strcmp(params->name, "vkGetMemoryWin32HandleKHR") || !strcmp(params->name, "vkGetMemoryWin32HandlePropertiesKHR"))
@@ -203,11 +203,10 @@ index 3f8f9ab64f0..2ff23e0b98d 100644
      return !!vk_funcs->p_vkGetDeviceProcAddr(device->host_device, UlongToPtr(params->name));
  }
  
-@@ -3546,3 +3611,96 @@ VkResult wine_vkGetMemoryWin32HandlePropertiesKHR(VkDevice device, VkExternalMem
+@@ -3546,3 +3611,95 @@ VkResult wine_vkGetMemoryWin32HandlePropertiesKHR(VkDevice device, VkExternalMem
         handleType must not be one of the handle types defined as opaque */
      return VK_ERROR_INVALID_EXTERNAL_HANDLE;
  }
-+
 +
 +VkResult wine_vkCreateSemaphore(VkDevice device_handle, const VkSemaphoreCreateInfo *create_info,
 +        const VkAllocationCallbacks *allocator, VkSemaphore *semaphore, void *win_create_info)
