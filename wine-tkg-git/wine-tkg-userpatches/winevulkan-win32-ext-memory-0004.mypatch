@@ -453,8 +453,8 @@ index 15aa5dbc9c5..911c0dcb0b3 100644
          wine_vk_normalize_handle_types_win(&p->compatibleHandleTypes);
      }
      return res;
-@@ -2335,18 +2342,154 @@ void wine_vkDestroySurfaceKHR(VkInstance handle, VkSurfaceKHR surface,
-     free(object);
+@@ -2335,18 +2342,154 @@ VkResult wine_vkQueuePresentKHR(VkQueue queue_handle, const VkPresentInfoKHR
+     return res;
  }
  
 +#define IOCTL_SHARED_GPU_RESOURCE_CREATE           CTL_CODE(FILE_DEVICE_VIDEO, 0, METHOD_BUFFERED, FILE_WRITE_ACCESS)
