@@ -31,4 +31,4 @@ index 4f60400ae24..d84b1135cba 100644
 +    return VK_SUCCESS;
  }
  
- #define IOCTL_SHARED_GPU_RESOURCE_SET_OBJECT           CTL_CODE(FILE_DEVICE_VIDEO, 6, METHOD_BUFFERED, FILE_WRITE_ACCESS)
+ VkResult wine_vkCreateSemaphore(VkDevice device_handle, const VkSemaphoreCreateInfo *create_info,

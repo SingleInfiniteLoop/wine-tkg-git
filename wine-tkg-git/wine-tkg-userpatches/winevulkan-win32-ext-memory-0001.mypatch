@@ -304,8 +304,8 @@ index d7b50bbbc7f..cc30ac65661 100644
  }
  
  VkResult wine_vkGetPhysicalDeviceImageFormatProperties2(VkPhysicalDevice phys_dev_handle,
-@@ -2244,10 +2316,26 @@ void wine_vkDestroySurfaceKHR(VkInstance handle, VkSurfaceKHR surface,
-     free(object);
+@@ -2244,11 +2316,27 @@ VkResult wine_vkQueuePresentKHR(VkQueue queue_handle, const VkPresentInfoKHR
+     return res;
  }
  
 +static HANDLE create_gpu_resource(int fd, LPCWSTR name)
@@ -328,10 +328,11 @@ index d7b50bbbc7f..cc30ac65661 100644
 +                               void *win_pAllocateInfo)
  {
      struct wine_device *device = wine_device_from_handle(handle);
-+    const VkMemoryAllocateInfo *win_alloc_info = win_pAllocateInfo;
      struct wine_device_memory *memory;
++    const VkMemoryAllocateInfo *win_alloc_info = win_pAllocateInfo;
      VkMemoryAllocateInfo info = *alloc_info;
      VkImportMemoryHostPointerInfoEXT host_pointer_info;
+     uint32_t mem_flags;
 @@ -2255,12 +2343,74 @@ VkResult wine_vkAllocateMemory(VkDevice handle, const VkMemoryAllocateInfo *allo
      void *mapping = NULL;
      VkResult result;
@@ -480,7 +481,7 @@ index d7b50bbbc7f..cc30ac65661 100644
  }
  
 @@ -2355,6 +2534,9 @@ void wine_vkFreeMemory(VkDevice handle, VkDeviceMemory memory_handle, const VkAl
-         NtFreeVirtualMemory(GetCurrentProcess(), &memory->mapping, &alloc_size, MEM_RELEASE);
+         NtFreeVirtualMemory(GetCurrentProcess(), &memory->vm_map, &alloc_size, MEM_RELEASE);
      }
  
 +    if (memory->handle != INVALID_HANDLE_VALUE)
