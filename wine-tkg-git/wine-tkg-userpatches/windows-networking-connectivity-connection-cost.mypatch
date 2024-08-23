@@ -1,0 +1,170 @@
+diff --git a/dlls/windows.networking.connectivity/windows.networking.connectivity_main.c b/dlls/windows.networking.connectivity/windows.networking.connectivity_main.c
+index 7773022ec2f..e417e18502c 100644
+--- a/dlls/windows.networking.connectivity/windows.networking.connectivity_main.c
++++ b/dlls/windows.networking.connectivity/windows.networking.connectivity_main.c
+@@ -193,6 +193,120 @@ static HRESULT STDMETHODCALLTYPE network_information_statics_GetConnectionProfil
+     return S_OK;
+ }
+ 
++struct connection_cost
++{
++    IConnectionCost IConnectionCost_iface;
++    LONG ref;
++};
++
++static inline struct connection_cost *impl_from_IConnectionCost(IConnectionCost *iface)
++{
++    return CONTAINING_RECORD(iface, struct connection_cost, IConnectionCost_iface);
++}
++
++static HRESULT WINAPI connection_cost_QueryInterface(IConnectionCost *iface, REFIID riid, void **object)
++{
++    TRACE("iface %p, iid %s, object %p stub!\n", iface, debugstr_guid(riid), object);
++
++    if (IsEqualGUID(riid, &IID_IUnknown) ||
++        IsEqualGUID(riid, &IID_IInspectable) ||
++        IsEqualGUID(riid, &IID_IConnectionCost))
++    {
++        IUnknown_AddRef(iface);
++        *object = iface;
++        return S_OK;
++    }
++
++    WARN("%s not implemented, returning E_NOINTERFACE.\n", debugstr_guid(riid));
++    *object = NULL;
++    return E_NOINTERFACE;
++}
++
++static ULONG WINAPI connection_cost_AddRef(IConnectionCost *iface)
++{
++    struct connection_cost *impl = impl_from_IConnectionCost(iface);
++    ULONG rc = InterlockedIncrement(&impl->ref);
++    TRACE("%p increasing refcount to %lu.\n", impl, rc);
++    return rc;
++}
++
++static ULONG WINAPI connection_cost_Release(IConnectionCost *iface)
++{
++    struct connection_cost *impl = impl_from_IConnectionCost(iface);
++    ULONG rc = InterlockedDecrement(&impl->ref);
++    TRACE("%p decreasing refcount to %lu.\n", impl, rc);
++    return rc;
++}
++
++static HRESULT WINAPI connection_cost_GetIids(IConnectionCost *iface, ULONG *iid_count, IID **iids)
++{
++    FIXME("iface %p, iid_count %p, iids %p stub!\n", iface, iid_count, iids);
++    return E_NOTIMPL;
++}
++
++static HRESULT WINAPI connection_cost_GetRuntimeClassName(IConnectionCost *iface, HSTRING *class_name)
++{
++    FIXME("iface %p, class_name %p stub!\n", iface, class_name);
++    return E_NOTIMPL;
++}
++
++static HRESULT WINAPI connection_cost_GetTrustLevel(IConnectionCost *iface, TrustLevel *trust_level)
++{
++    FIXME("iface %p, trust_level %p stub!\n", iface, trust_level);
++    return E_NOTIMPL;
++}
++
++static HRESULT WINAPI connection_cost_get_NetworkCostType(IConnectionCost *iface,
++                                        enum __x_ABI_CWindows_CNetworking_CConnectivity_CNetworkCostType *value)
++{
++    TRACE("iface %p stub!\n", iface);
++    *value = 1;
++    return S_OK;
++}
++
++static HRESULT WINAPI connection_cost_get_Roaming(IConnectionCost *iface, BOOLEAN *value)
++{
++    TRACE("iface %p stub!\n", iface);
++    *value = FALSE;
++    return S_OK;
++}
++
++static HRESULT WINAPI connection_cost_get_OverDataLimit(IConnectionCost *iface, BOOLEAN *value)
++{
++    TRACE("iface %p stub!\n", iface);
++    *value = FALSE;
++    return S_OK;
++}
++
++static HRESULT WINAPI connection_cost_get_ApproachingDataLimit(IConnectionCost *iface, BOOLEAN *value)
++{
++    TRACE("iface %p stub!\n", iface);
++    *value = FALSE;
++    return S_OK;
++}
++
++static HRESULT WINAPI connection_cost_get_BackgroundDataUsageRestricted(IConnectionCost *iface, BOOLEAN *value)
++{
++    TRACE("iface %p stub!\n", iface);
++    *value = FALSE;
++    return S_OK;
++}
++
++struct __x_ABI_CWindows_CNetworking_CConnectivity_CIConnectionCostVtbl connection_cost_vtbl =
++{
++    connection_cost_QueryInterface,
++    connection_cost_AddRef,
++    connection_cost_Release,
++    connection_cost_GetIids,
++    connection_cost_GetRuntimeClassName,
++    connection_cost_GetTrustLevel,
++    connection_cost_get_NetworkCostType,
++    connection_cost_get_Roaming,
++    connection_cost_get_OverDataLimit,
++    connection_cost_get_ApproachingDataLimit,
++    connection_cost_get_BackgroundDataUsageRestricted
++};
++
+ struct connection_profile
+ {
+     IConnectionProfile IConnectionProfile_iface;
+@@ -233,8 +347,8 @@ static ULONG WINAPI connection_profile_AddRef(IConnectionProfile *iface)
+ static ULONG WINAPI connection_profile_Release(IConnectionProfile *iface)
+ {
+     struct connection_profile *impl = impl_from_IConnectionProfile(iface);
+-    ULONG rc = InterlockedIncrement(&impl->ref);
+-    TRACE("%p increasing refcount to %lu.\n", impl, rc);
++    ULONG rc = InterlockedDecrement(&impl->ref);
++    TRACE("%p decreasing refcount to %lu.\n", impl, rc);
+     return rc;
+ }
+ 
+@@ -280,8 +394,19 @@ static HRESULT WINAPI connection_profile_GetNetworkNames(IConnectionProfile *ifa
+ static HRESULT WINAPI connection_profile_GetConnectionCost(IConnectionProfile *iface,
+         __x_ABI_CWindows_CNetworking_CConnectivity_CIConnectionCost **value)
+ {
+-    FIXME("iface %p, value %p stub!\n", iface, value);
+-    return E_NOTIMPL;
++    struct connection_cost *cost;
++
++    FIXME("iface %p stub!\n", iface);
++
++    cost = heap_alloc(sizeof(struct connection_cost));
++    if (!cost)
++        return E_OUTOFMEMORY;
++
++    cost->IConnectionCost_iface.lpVtbl = &connection_cost_vtbl;
++    cost->ref = 1;
++
++    *value = &cost->IConnectionCost_iface;
++    return S_OK;
+ }
+ 
+ static HRESULT WINAPI connection_profile_GetDataPlanStatus(IConnectionProfile *iface,
+diff --git a/include/windows.networking.connectivity.idl b/include/windows.networking.connectivity.idl
+index 451e67df096..dd37a4d2e23 100644
+--- a/include/windows.networking.connectivity.idl
++++ b/include/windows.networking.connectivity.idl
+@@ -176,6 +176,7 @@ namespace Windows.Networking.Connectivity
+         [propget] HRESULT Roaming([out, retval] boolean *value);
+         [propget] HRESULT OverDataLimit([out, retval] boolean *value);
+         [propget] HRESULT ApproachingDataLimit([out, retval] boolean *value);
++        [propget] HRESULT BackgroundDataUsageRestricted([out, retval] boolean *value);
+     }
+ 
+     [
