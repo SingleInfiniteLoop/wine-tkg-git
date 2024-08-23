@@ -89,7 +89,7 @@ index 08dad9cb646..b2a49a16177 100644
 +{
 +    WCHAR full_path[MAX_PATH], config_path[MAX_PATH];
 +    WCHAR *p;
-+    DWORD size;
++    UINT size;
 +    void *block;
 +    DWORD *translation;
 +    char buf[100];
@@ -410,7 +410,7 @@ index 22f9115011e..01f4ae08721 100644
 +
 +    WCHAR full_path[MAX_PATH];
      WCHAR *p;
-     DWORD size;
+     UINT size;
      void *block;
      DWORD *translation;
      char buf[100];
@@ -730,7 +730,7 @@ index 109fa6c7fec..d9754f10ed0 100644
 -
      WCHAR full_path[MAX_PATH];
 -    WCHAR *p;
--    DWORD size;
+-    UINT size;
 -    void *block;
      DWORD *translation;
 -    char buf[100];
@@ -738,7 +738,7 @@ index 109fa6c7fec..d9754f10ed0 100644
 -    WCHAR *new_cmd_line;
 +    char buf[100];
 +    void *block;
-+    DWORD size;
++    UINT size;
  
      if (!GetLongPathNameW( app_name, full_path, MAX_PATH )) lstrcpynW( full_path, app_name, MAX_PATH );
      if (!GetFullPathNameW( full_path, MAX_PATH, full_path, NULL )) lstrcpynW( full_path, app_name, MAX_PATH );
@@ -912,7 +912,7 @@ index 98af91c47a7..375a0f416a5 100644
 +    WCHAR *p, *tidy_cmdline = cmd_line, *orig_app_name = NULL;
      RTL_USER_PROCESS_PARAMETERS *params = NULL;
      RTL_USER_PROCESS_INFORMATION rtl_info;
-     HANDLE parent = 0, debug = 0, elevated_token = NULL;
+     HANDLE parent = 0, debug = 0;
 @@ -680,7 +689,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH CreateProcessInternalW( HANDLE token, const WCHAR
          app_name = name;
      }
