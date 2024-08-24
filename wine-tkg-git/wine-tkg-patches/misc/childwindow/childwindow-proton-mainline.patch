@@ -372,6 +372,18 @@ index 16084175013a4441ed3db61752340772dcd72dc3..175d8cfa49a24c66f3369375b1628216
      .p_vulkan_surface_detach = wayland_vulkan_surface_detach,
      .p_vulkan_surface_presented = wayland_vulkan_surface_presented,
  
+diff --git a/dlls/winex11.drv/bitblt.c b/dlls/winex11.drv/bitblt.c
+index 11111111111..11111111111 100644
+--- a/dlls/winex11.drv/bitblt.c
++++ b/dlls/winex11.drv/bitblt.c
+@@ -1956,7 +1956,6 @@ static BOOL enable_direct_drawing( struct x11drv_win_data *data, BOOL layered )
+     if (layered) return FALSE;
+     if (data->embedded) return TRUE; /* draw directly to the window */
+     if (data->whole_window == root_window) return TRUE; /* draw directly to the window */
+-    if (data->client_window) return TRUE; /* draw directly to the window */
+     if (!client_side_graphics) return TRUE; /* draw directly to the window */
+     return FALSE;
+ }
 diff --git a/dlls/winex11.drv/vulkan.c b/dlls/winex11.drv/vulkan.c
 index 85993bc517a5d0ac2e6736278d0f3db9c52bf82b..df6882271b440bdcf7ea32854e77dfdc16719fa3 100644
 --- a/dlls/winex11.drv/vulkan.c
