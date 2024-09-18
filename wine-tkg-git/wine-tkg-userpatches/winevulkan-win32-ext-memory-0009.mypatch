@@ -8,8 +8,8 @@ index 5e7503e895d..3376eaabe8d 100755
      "VK_KHR_external_fence_win32",
 -    "VK_KHR_external_semaphore_win32",
      # Relates to external_semaphore and needs type conversions in bitflags.
+     "VK_KHR_maintenance7", # Causes infinity recursion in struct convert code
      "VK_KHR_shared_presentable_image", # Needs WSI work.
-     "VK_KHR_video_encode_queue",
 @@ -113,7 +112,6 @@ UNSUPPORTED_EXTENSIONS = [
      "VK_EXT_physical_device_drm",
      "VK_GOOGLE_surfaceless_query",
