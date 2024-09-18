@@ -27,7 +27,7 @@ index 1ff9b287d21..8bc50d6cd99 100644
  HRESULT video_processor_create(REFIID riid, void **ret);
 +HRESULT gstreamer_scheme_handler_create(REFIID riid, void **ret);
  
- extern const GUID MFAudioFormat_RAW_AAC;
+ HRESULT h264_encoder_create(REFIID riid, void **ret);
  
 diff --git a/dlls/winegstreamer/media_source.c b/dlls/winegstreamer/media_source.c
 index a39293c8f9d..a0fe52f1604 100644
@@ -304,8 +304,8 @@ index 3e5f8c7b1ee..aae1b63de5d 100644
 --- a/dlls/winegstreamer/mfplat.c
 +++ b/dlls/winegstreamer/mfplat.c
 @@ -122,6 +122,8 @@ static const IClassFactoryVtbl class_factory_vtbl =
- 
- static const GUID CLSID_GStreamerByteStreamHandler = {0x317df618, 0x5e5a, 0x468a, {0x9f, 0x15, 0xd8, 0x27, 0xa9, 0xa0, 0x81, 0x62}};
+ static const GUID CLSID_wg_h264_decoder = {0x1f1e273d,0x12c0,0x4b3a,{0x8e,0x9b,0x19,0x33,0xc2,0x49,0x8a,0xea}};
+ static const GUID CLSID_wg_h264_encoder = {0x6c34de69,0x4670,0x46cd,{0x8c,0xb4,0x1f,0x2f,0xa1,0xdf,0xfb,0x65}};
  
 +static const GUID CLSID_GStreamerSchemePlugin = {0x587eeb6a,0x7336,0x4ebd,{0xa4,0xf2,0x91,0xc9,0x48,0xde,0x62,0x2c}};
 +
@@ -313,9 +313,9 @@ index 3e5f8c7b1ee..aae1b63de5d 100644
  {
      const GUID *clsid;
 @@ -134,6 +136,7 @@ class_objects[] =
-     { &CLSID_MSAACDecMFT, &aac_decoder_create },
-     { &CLSID_MSH264DecoderMFT, &h264_decoder_create },
-     { &CLSID_MSH264EncoderMFT, &h264_encoder_create },
+     { &CLSID_wg_aac_decoder, &aac_decoder_create },
+     { &CLSID_wg_h264_decoder, &h264_decoder_create },
+     { &CLSID_wg_h264_encoder, &h264_encoder_create },
 +    { &CLSID_GStreamerSchemePlugin, &gstreamer_scheme_handler_create },
  };
  
@@ -324,7 +324,7 @@ diff --git a/dlls/winegstreamer/winegstreamer.rgs b/dlls/winegstreamer/winegstre
 index 923ba673f8c..c50d3a05747 100644
 --- a/dlls/winegstreamer/winegstreamer.rgs
 +++ b/dlls/winegstreamer/winegstreamer.rgs
-@@ -12,3 +12,31 @@ HKCR
+@@ -12,3 +12,39 @@ HKCR
          }
      }
  }
@@ -351,6 +351,14 @@ index 923ba673f8c..c50d3a05747 100644
 +                    {
 +                        val '{587eeb6a-7336-4ebd-a4f2-91c948de622c}' = s 'GStreamer Scheme Handler'
 +                    }
++                    'rtspt:'
++                    {
++                        val '{587eeb6a-7336-4ebd-a4f2-91c948de622c}' = s 'GStreamer Scheme Handler'
++                    }
++                    'rtspu:'
++                    {
++                        val '{587eeb6a-7336-4ebd-a4f2-91c948de622c}' = s 'GStreamer Scheme Handler'
++                    }
 +                }
 +            }
 +        }
@@ -360,10 +368,10 @@ diff --git a/dlls/winegstreamer/winegstreamer_classes.idl b/dlls/winegstreamer/w
 index bb727ca8645..16b24a23261 100644
 --- a/dlls/winegstreamer/winegstreamer_classes.idl
 +++ b/dlls/winegstreamer/winegstreamer_classes.idl
-@@ -131,3 +131,10 @@ coclass MFMP3SinkClassFactory {}
-     uuid(a22c4fc7-6e91-4e1d-89e9-53b2667b72ba)
+@@ -131,3 +131,10 @@ coclass wg_mp3_sink_factory {}
+     uuid(5d5407d9-c6ca-4770-a7cc-27c0cb8a7627)
  ]
- coclass MFMPEG4SinkClassFactory {}
+ coclass wg_mpeg4_sink_factory {}
 +
 +[
 +    helpstring("GStreamer scheme handler"),
