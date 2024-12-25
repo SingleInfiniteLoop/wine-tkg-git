@@ -16,7 +16,7 @@ diff --git a/dlls/winevulkan/vulkan.c b/dlls/winevulkan/vulkan.c
 index 39137623260..15aa5dbc9c5 100644
 --- a/dlls/winevulkan/vulkan.c
 +++ b/dlls/winevulkan/vulkan.c
-@@ -1426,9 +1426,26 @@ static VkResult wine_vk_get_physical_device_image_format_properties_2(struct win
+@@ -1426,9 +1426,26 @@ static VkResult wine_vk_get_physical_device_image_format_properties_2(struct vul
          VkResult (*p_vkGetPhysicalDeviceImageFormatProperties2)(VkPhysicalDevice, const VkPhysicalDeviceImageFormatInfo2 *, VkImageFormatProperties2 *),
          const VkPhysicalDeviceImageFormatInfo2 *format_info, VkImageFormatProperties2 *properties)
  {
@@ -40,10 +40,10 @@ index 39137623260..15aa5dbc9c5 100644
 +        }
 +    }
 +
-     res = p_vkGetPhysicalDeviceImageFormatProperties2(phys_dev->host_physical_device,
+     res = p_vkGetPhysicalDeviceImageFormatProperties2(physical_device->host.physical_device,
              format_info, properties);
  
-@@ -1436,9 +1453,14 @@ static VkResult wine_vk_get_physical_device_image_format_properties_2(struct win
+@@ -1436,9 +1453,14 @@ static VkResult wine_vk_get_physical_device_image_format_properties_2(struct vul
                                                        VK_STRUCTURE_TYPE_EXTERNAL_IMAGE_FORMAT_PROPERTIES)))
      {
          VkExternalMemoryProperties *p = &external_image_properties->externalMemoryProperties;
@@ -61,15 +61,15 @@ index 39137623260..15aa5dbc9c5 100644
      }
      return res;
  }
-@@ -2652,11 +2674,16 @@ VkResult wine_vkCreateImage(VkDevice handle, const VkImageCreateInfo *create_inf
-                             const VkAllocationCallbacks *allocator, VkImage *image)
+@@ -2652,11 +2674,16 @@ VkResult wine_vkCreateImage(VkDevice client_device, const VkImageCreateInfo *create_inf
  {
-     struct wine_device *device = wine_device_from_handle(handle);
+     struct vulkan_device *device = vulkan_device_from_handle(client_device);
+     struct wine_phys_dev *physical_device = CONTAINING_RECORD(device->physical_device, struct wine_phys_dev, obj);
 -    VkExternalMemoryImageCreateInfo external_memory_info;
 +    VkExternalMemoryImageCreateInfo external_memory_info, *update_info;
      VkImageCreateInfo info = *create_info;
  
--    if (device->phys_dev->external_memory_align &&
+-    if (physical_device->external_memory_align &&
 -        !find_next_struct(info.pNext, VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO))
 +    if ((update_info = find_next_struct(info.pNext, VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO)))
 +    {
@@ -77,7 +77,7 @@ index 39137623260..15aa5dbc9c5 100644
 +            update_info->handleTypes |= VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT_KHR;
 +        wine_vk_normalize_handle_types_host(&update_info->handleTypes);
 +    }
-+    else if (device->phys_dev->external_memory_align)
++    else if (physical_device->external_memory_align)
      {
          external_memory_info.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO;
          external_memory_info.pNext = info.pNext;
