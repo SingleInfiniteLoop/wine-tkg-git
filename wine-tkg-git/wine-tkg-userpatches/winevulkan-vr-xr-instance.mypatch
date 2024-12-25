@@ -79,8 +79,8 @@ index 7b550857898..3611ac4abd0 100644
          FIXME("Support for allocation callbacks not implemented yet\n");
  
 @@ -899,11 +906,25 @@ VkResult wine_vkCreateDevice(VkPhysicalDevice phys_dev_handle, const VkDeviceCre
- 
-     object->phys_dev = phys_dev;
+     if (!(device = calloc(1, offsetof(struct wine_device, queues[queue_count]))))
+         return VK_ERROR_OUT_OF_HOST_MEMORY;
  
 +    if ((callback = (VkCreateInfoWineDeviceCallback *)create_info->pNext)
 +            && callback->sType == VK_STRUCTURE_TYPE_CREATE_INFO_WINE_DEVICE_CALLBACK)
@@ -90,18 +90,18 @@ index 7b550857898..3611ac4abd0 100644
 +    }
 +
      init_conversion_context(&ctx);
-     res = wine_vk_device_convert_create_info(phys_dev, &ctx, create_info, &create_info_host);
+     res = wine_vk_device_convert_create_info(client_physical_device, &ctx, create_info, &create_info_host);
      if (res == VK_SUCCESS)
--        res = instance->funcs.p_vkCreateDevice(phys_dev->host_physical_device, &create_info_host,
--                                               NULL /* allocator */, &object->host_device);
+-        res = instance->p_vkCreateDevice(physical_device->host.physical_device, &create_info_host,
+-                                               NULL /* allocator */, &host_device);
 +    {
 +        if (native_create_device)
-+            res = native_create_device(phys_dev->host_physical_device,
-+                    &create_info_host, NULL /* allocator */, &object->host_device,
++            res = native_create_device(physical_device->host.physical_device,
++                    &create_info_host, NULL /* allocator */, &host_device,
 +                    vk_funcs->p_vkGetInstanceProcAddr, native_create_device_context);
 +        else
-+            res = instance->funcs.p_vkCreateDevice(phys_dev->host_physical_device,
-+                    &create_info_host, NULL /* allocator */, &object->host_device);
++            res = instance->p_vkCreateDevice(physical_device->host.physical_device,
++                    &create_info_host, NULL /* allocator */, &host_device);
 +    }
      free_conversion_context(&ctx);
      if (res != VK_SUCCESS)
