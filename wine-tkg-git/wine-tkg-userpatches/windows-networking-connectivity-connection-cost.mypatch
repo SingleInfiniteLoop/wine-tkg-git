@@ -1,10 +1,10 @@
-diff --git a/dlls/windows.networking.connectivity/windows.networking.connectivity_main.c b/dlls/windows.networking.connectivity/windows.networking.connectivity_main.c
+diff --git a/dlls/windows.networking.connectivity/network_information.c b/dlls/windows.networking.connectivity/network_information.c
 index 7773022ec2f..e417e18502c 100644
---- a/dlls/windows.networking.connectivity/windows.networking.connectivity_main.c
-+++ b/dlls/windows.networking.connectivity/windows.networking.connectivity_main.c
-@@ -193,6 +193,120 @@ static HRESULT STDMETHODCALLTYPE network_information_statics_GetConnectionProfil
-     return S_OK;
- }
+--- a/dlls/windows.networking.connectivity/network_information.c
++++ b/dlls/windows.networking.connectivity/network_information.c
+@@ -193,6 +193,120 @@ static const struct IActivationFactoryVtbl factory_vtbl =
+     factory_ActivateInstance,
+ };
  
 +struct connection_cost
 +{
@@ -123,39 +123,30 @@ index 7773022ec2f..e417e18502c 100644
  struct connection_profile
  {
      IConnectionProfile IConnectionProfile_iface;
-@@ -233,8 +347,8 @@ static ULONG WINAPI connection_profile_AddRef(IConnectionProfile *iface)
- static ULONG WINAPI connection_profile_Release(IConnectionProfile *iface)
- {
-     struct connection_profile *impl = impl_from_IConnectionProfile(iface);
--    ULONG rc = InterlockedIncrement(&impl->ref);
--    TRACE("%p increasing refcount to %lu.\n", impl, rc);
-+    ULONG rc = InterlockedDecrement(&impl->ref);
-+    TRACE("%p decreasing refcount to %lu.\n", impl, rc);
-     return rc;
- }
+@@ -280,8 +394,21 @@ static HRESULT WINAPI connection_profile_GetNetworkNames( IConnectionProfile *ifa
  
-@@ -280,8 +394,19 @@ static HRESULT WINAPI connection_profile_GetNetworkNames(IConnectionProfile *ifa
- static HRESULT WINAPI connection_profile_GetConnectionCost(IConnectionProfile *iface,
-         __x_ABI_CWindows_CNetworking_CConnectivity_CIConnectionCost **value)
+ static HRESULT WINAPI connection_profile_GetConnectionCost( IConnectionProfile *iface, IConnectionCost **value )
  {
--    FIXME("iface %p, value %p stub!\n", iface, value);
+-    FIXME( "iface %p, value %p stub!\n", iface, value );
 -    return E_NOTIMPL;
-+    struct connection_cost *cost;
++    struct connection_cost *impl;
 +
-+    FIXME("iface %p stub!\n", iface);
++    FIXME( "iface %p, value %p\n", iface, value );
 +
-+    cost = heap_alloc(sizeof(struct connection_cost));
-+    if (!cost)
++    *value = NULL;
++    impl = calloc( 1, sizeof( *impl ) );
++    if (!impl)
 +        return E_OUTOFMEMORY;
 +
-+    cost->IConnectionCost_iface.lpVtbl = &connection_cost_vtbl;
-+    cost->ref = 1;
++    impl->IConnectionCost_iface.lpVtbl = &connection_cost_vtbl;
++    impl->ref = 1;
 +
-+    *value = &cost->IConnectionCost_iface;
++    *value = &impl->IConnectionCost_iface;
++    TRACE( "created IConnectionCost %p.\n", *value );
 +    return S_OK;
  }
  
- static HRESULT WINAPI connection_profile_GetDataPlanStatus(IConnectionProfile *iface,
+ static HRESULT WINAPI connection_profile_GetDataPlanStatus( IConnectionProfile *iface, IDataPlanStatus **value )
 diff --git a/include/windows.networking.connectivity.idl b/include/windows.networking.connectivity.idl
 index 451e67df096..dd37a4d2e23 100644
 --- a/include/windows.networking.connectivity.idl

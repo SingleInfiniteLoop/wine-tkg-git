@@ -2,7 +2,7 @@ diff --git a/dlls/winevulkan/vulkan.c b/dlls/winevulkan/vulkan.c
 index e7d00813a42..f1da22dc772 100644
 --- a/dlls/winevulkan/vulkan.c
 +++ b/dlls/winevulkan/vulkan.c
-@@ -479,11 +479,70 @@ static const char *find_extension(const char *const *extensions
+@@ -479,12 +479,71 @@ static const char *find_extension(const char *const *extensions
      return NULL;
  }
  
@@ -62,9 +62,10 @@ index e7d00813a42..f1da22dc772 100644
 +    return list;
 +}
 +
- static VkResult wine_vk_device_convert_create_info(struct wine_phys_dev *phys_dev,
+ static VkResult wine_vk_device_convert_create_info(VkPhysicalDevice client_physical_device,
          struct conversion_context *ctx, const VkDeviceCreateInfo *src, VkDeviceCreateInfo *dst)
  {
+     struct wine_phys_dev *phys_dev = wine_phys_dev_from_handle(client_physical_device);
 +    static const char *wine_xr_extension_name = "VK_WINE_openxr_device_extensions";
      const char *extra_extensions[2], * const*extensions = src->ppEnabledExtensionNames;
      unsigned int i, extra_count = 0, extensions_count = src->enabledExtensionCount;

@@ -2,14 +2,15 @@ diff --git a/dlls/winevulkan/vulkan.c b/dlls/winevulkan/vulkan.c
 index 4f60400ae24..d84b1135cba 100644
 --- a/dlls/winevulkan/vulkan.c
 +++ b/dlls/winevulkan/vulkan.c
-@@ -3770,13 +3770,25 @@ VkResult wine_vkGetMemoryWin32HandleKHR(VkDevice device, const VkMemoryGetWin32H
+@@ -3770,13 +3770,26 @@ VkResult wine_vkGetMemoryWin32HandleKHR(VkDevice client_device, const VkMemoryGetWin32H
      }
  }
  
 -VkResult wine_vkGetMemoryWin32HandlePropertiesKHR(VkDevice device, VkExternalMemoryHandleTypeFlagBits type, HANDLE handle, VkMemoryWin32HandlePropertiesKHR *properties)
-+VkResult wine_vkGetMemoryWin32HandlePropertiesKHR(VkDevice device_handle, VkExternalMemoryHandleTypeFlagBits type, HANDLE handle, VkMemoryWin32HandlePropertiesKHR *properties)
++VkResult wine_vkGetMemoryWin32HandlePropertiesKHR(VkDevice client_device, VkExternalMemoryHandleTypeFlagBits type, HANDLE handle, VkMemoryWin32HandlePropertiesKHR *properties)
  {
-+    struct wine_device *device = wine_device_from_handle(device_handle);
++    struct vulkan_device *device = vulkan_device_from_handle(client_device);
++    struct wine_phys_dev *physical_device = CONTAINING_RECORD(device->physical_device, struct wine_phys_dev, obj);
 +    unsigned int i;
 +
      TRACE("%p %u %p %p\n", device, type, handle, properties);
@@ -24,11 +25,11 @@ index 4f60400ae24..d84b1135cba 100644
 +    }
 +
 +    properties->memoryTypeBits = 0;
-+    for (i = 0; i < device->phys_dev->memory_properties.memoryTypeCount; ++i)
-+        if (device->phys_dev->memory_properties.memoryTypes[i].propertyFlags == VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
++    for (i = 0; i < physical_device->memory_properties.memoryTypeCount; ++i)
++        if (physical_device->memory_properties.memoryTypes[i].propertyFlags == VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
 +            properties->memoryTypeBits |= 1u << i;
 +
 +    return VK_SUCCESS;
  }
  
- VkResult wine_vkCreateSemaphore(VkDevice device_handle, const VkSemaphoreCreateInfo *create_info,
+ VkResult wine_vkCreateSemaphore(VkDevice client_device, const VkSemaphoreCreateInfo *create_info,
