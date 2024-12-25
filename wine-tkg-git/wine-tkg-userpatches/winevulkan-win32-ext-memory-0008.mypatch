@@ -11,7 +11,7 @@ index 911c0dcb0b3..3f8f9ab64f0 100644
 +                VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D11_TEXTURE_BIT |
 +                VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D11_TEXTURE_KMT_BIT;
  
- static void wine_vk_get_physical_device_external_buffer_properties(struct wine_phys_dev *phys_dev,
+ static void wine_vk_get_physical_device_external_buffer_properties(struct vulkan_physical_device *physical_device,
          void (*p_vkGetPhysicalDeviceExternalBufferProperties)(VkPhysicalDevice, const VkPhysicalDeviceExternalBufferInfo *, VkExternalBufferProperties *),
 @@ -2546,12 +2548,14 @@ VkResult wine_vkAllocateMemory(VkDevice handle, const VkMemoryAllocateInfo *allo
          switch (handle_import_info->handleType)
