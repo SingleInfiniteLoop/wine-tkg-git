@@ -15,8 +15,8 @@ diff --git a/dlls/winegstreamer/main.c b/dlls/winegstreamer/main.c
 index ca8518ab3d0..a39293c8f9d 100644
 --- a/dlls/winegstreamer/main.c
 +++ b/dlls/winegstreamer/main.c
-@@ -68,10 +68,11 @@ bool array_reserve(void **elements
-     return TRUE;
+@@ -163,10 +163,11 @@ bool array_reserve(void **elements
+     return E_NOTIMPL;
  }
  
 -wg_parser_t wg_parser_create(bool output_compressed)
