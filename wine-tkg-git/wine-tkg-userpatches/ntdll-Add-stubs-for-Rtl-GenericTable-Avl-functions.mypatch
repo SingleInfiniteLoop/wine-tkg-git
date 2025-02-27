@@ -20,21 +20,21 @@ index 85bc32a..04bd76a 100644
 @@ -602,7 +602,7 @@
  @ stdcall RtlDeleteCriticalSection(ptr)
  @ stdcall -arch=!i386 RtlDeleteGrowableFunctionTable(ptr)
- @ stub RtlDeleteElementGenericTable
+ @ stdcall RtlDeleteElementGenericTable(ptr ptr)
 -@ stub RtlDeleteElementGenericTableAvl
 +@ stdcall RtlDeleteElementGenericTableAvl(ptr ptr)
  @ cdecl -arch=!i386 RtlDeleteFunctionTable(ptr)
- @ stub RtlDeleteNoSplay
+ @ stdcall RtlDeleteNoSplay(ptr ptr)
  @ stub RtlDeleteOwnersRanges
 @@ -646,7 +646,7 @@
  @ stdcall RtlEnterCriticalSection(ptr)
  @ stub RtlEnumProcessHeaps
- @ stub RtlEnumerateGenericTable
+ @ stdcall RtlEnumerateGenericTable(ptr long)
 -# @ stub RtlEnumerateGenericTableAvl
 +@ stdcall RtlEnumerateGenericTableAvl(ptr long)
  # @ stub RtlEnumerateGenericTableLikeADirectory
  @ stdcall RtlEnumerateGenericTableWithoutSplaying(ptr ptr)
- # @ stub RtlEnumerateGenericTableWithoutSplayingAvl
+ @ stdcall RtlEnumerateGenericTableWithoutSplayingAvl(ptr ptr)
 @@ -725,7 +725,7 @@
  @ stdcall RtlGetCurrentTransaction()
  @ stdcall RtlGetDaclSecurityDescriptor(ptr ptr ptr ptr)
@@ -48,7 +48,7 @@ diff --git a/dlls/ntdll/rtl.c b/dlls/ntdll/rtl.c
 index 11067f4..d1b489b 100644
 --- a/dlls/ntdll/rtl.c
 +++ b/dlls/ntdll/rtl.c
-@@ -2170,8 +2170,36 @@
+@@ -2170,9 +2170,37 @@
  /***********************************************************************
   *           RtlInsertElementGenericTableAvl  (NTDLL.@)
   */
@@ -95,21 +95,21 @@ index d445c5a..4683dd3 100644
 @@ -1054,7 +1054,7 @@
  @ stdcall RtlDeleteAce(ptr long)
  @ stdcall RtlDeleteAtomFromAtomTable(ptr long)
- @ stub RtlDeleteElementGenericTable
+ @ stdcall RtlDeleteElementGenericTable(ptr ptr)
 -@ stub RtlDeleteElementGenericTableAvl
 +@ stdcall RtlDeleteElementGenericTableAvl(ptr ptr)
- @ stub RtlDeleteNoSplay
+ @ stdcall RtlDeleteNoSplay(ptr ptr)
  @ stub RtlDeleteOwnersRanges
  @ stub RtlDeleteRange
 @@ -1070,7 +1070,7 @@
  @ stdcall -arch=win32 RtlEnlargedUnsignedDivide(int64 long ptr)
  @ stdcall -arch=win32 -ret64 RtlEnlargedUnsignedMultiply(long long)
- @ stub RtlEnumerateGenericTable
+ @ stdcall RtlEnumerateGenericTable(ptr long)
 -@ stub RtlEnumerateGenericTableAvl
 +@ stdcall RtlEnumerateGenericTableAvl(ptr long)
  @ stub RtlEnumerateGenericTableLikeADirectory
  @ stdcall RtlEnumerateGenericTableWithoutSplaying(ptr ptr)
- @ stub RtlEnumerateGenericTableWithoutSplayingAvl
+ @ stdcall RtlEnumerateGenericTableWithoutSplayingAvl(ptr ptr)
 @@ -1115,7 +1115,7 @@
  @ stdcall RtlGetDaclSecurityDescriptor(ptr ptr ptr ptr)
  @ stub RtlGetDefaultCodePage
@@ -124,17 +124,17 @@ index a6b2974..ba25ffd 100644
 --- a/include/ddk/ntddk.h
 +++ b/include/ddk/ntddk.h
 @@ -272,7 +272,10 @@ void *    WINAPI RtlGetElementGenericTable(PRTL_GENERIC_TABLE,ULONG);
- void *    WINAPI RtlGetElementGenericTable(PRTL_GENERIC_TABLE,ULONG);
  void      WINAPI RtlInitializeGenericTable(PRTL_GENERIC_TABLE,PRTL_GENERIC_COMPARE_ROUTINE,PRTL_GENERIC_ALLOCATE_ROUTINE,PRTL_GENERIC_FREE_ROUTINE,void *);
  void      WINAPI RtlInitializeGenericTableAvl(PRTL_AVL_TABLE,PRTL_AVL_COMPARE_ROUTINE,PRTL_AVL_ALLOCATE_ROUTINE, PRTL_AVL_FREE_ROUTINE,void *);
+ PVOID     WINAPI RtlInsertElementGenericTable(PRTL_GENERIC_TABLE,PVOID,CLONG,PBOOLEAN);
 -void      WINAPI RtlInsertElementGenericTableAvl(PRTL_AVL_TABLE,void *,ULONG,BOOL*);
 +void *    WINAPI RtlInsertElementGenericTableAvl(PRTL_AVL_TABLE,void *,ULONG,BOOLEAN*);
 +void *    WINAPI RtlGetElementGenericTableAvl(PRTL_AVL_TABLE,ULONG);
 +BOOLEAN   WINAPI RtlDeleteElementGenericTableAvl(PRTL_AVL_TABLE,void *);
 +void *    WINAPI RtlEnumerateGenericTableAvl(PRTL_AVL_TABLE,BOOLEAN);
+ BOOLEAN   WINAPI RtlIsGenericTableEmpty(PRTL_GENERIC_TABLE);
  void *    WINAPI RtlLookupElementGenericTable(PRTL_GENERIC_TABLE,void *);
  void *    WINAPI RtlLookupElementGenericTableAvl(PRTL_AVL_TABLE,void *);
- void      WINAPI RtlMapGenericMask(ACCESS_MASK*,const GENERIC_MAPPING*);
 -- 
 2.25.1
 

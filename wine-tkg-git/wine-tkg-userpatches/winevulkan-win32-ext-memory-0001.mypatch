@@ -10,11 +10,12 @@ index 874e1b51acb..3d5578b6527 100755
      "VK_KHR_external_semaphore_fd",
      "VK_SEC_amigo_profiling", # Angle specific.
  
-@@ -130,7 +129,6 @@ UNSUPPORTED_EXTENSIONS = [
+@@ -130,8 +129,7 @@ UNSUPPORTED_EXTENSIONS = [
  # but not expose to applications (useful for test commits)
  UNEXPOSED_EXTENSIONS = {
      "VK_EXT_map_memory_placed",
 -    "VK_KHR_external_memory_win32",
+     "VK_EXT_headless_surface",
  }
  
  # The Vulkan loader provides entry-points for core functionality and important
