@@ -1,0 +1,120 @@
+diff --git a/dlls/winegstreamer/media_source.c b/dlls/winegstreamer/media_source.c
+index ff7d5d2ea70..f36f59c7542 100644
+--- a/dlls/winegstreamer/media_source.c
++++ b/dlls/winegstreamer/media_source.c
+@@ -137,6 +137,9 @@ struct media_stream
+     DWORD stream_id;
+     BOOL active;
+     BOOL eos;
++
++    DWORD busy;
++    CONDITION_VARIABLE cond;
+ };
+ 
+ enum source_async_op
+@@ -805,16 +808,33 @@ static HRESULT wait_on_sample(struct media_stream *stream, IUnknown *token)
+ {
+     struct media_source *source = impl_from_IMFMediaSource(stream->media_source);
+     struct wg_parser_buffer buffer;
++    BOOL ret;
+ 
+     TRACE("%p, %p\n", stream, token);
+ 
+-    while (wg_parser_stream_get_buffer(source->wg_parser, stream->wg_stream, &buffer))
++    do
+     {
+-        HRESULT hr = media_stream_send_sample(stream, &buffer, token);
+-        if (hr != S_FALSE)
+-            return hr;
+-    }
++        stream->busy = TRUE;
++        LeaveCriticalSection(&source->cs);
++        ret = wg_parser_stream_get_buffer(source->wg_parser, stream->wg_stream, &buffer);
++        EnterCriticalSection(&source->cs);
++        stream->busy = FALSE;
++        WakeConditionVariable(&stream->cond);
++
++        if (source->state == SOURCE_SHUTDOWN)
++        {
++            WARN("media source has been shutdown, returning\n");
++            return MF_E_SHUTDOWN;
++        }
+ 
++        if (ret)
++        {
++            HRESULT hr = media_stream_send_sample(stream, &buffer, token);
++            if (hr != S_FALSE)
++                return hr;
++        }
++    } while (ret);
++
+     return media_stream_send_eos(source, stream);
+ }
+ 
+@@ -1392,6 +1392,7 @@ static ULONG WINAPI media_source_Release(IMFMediaSource *iface)
+     if (!ref)
+     {
+         IMFMediaSource_Shutdown(iface);
++        MFUnlockWorkQueue(source->async_commands_queue);
+         IMFMediaEventQueue_Release(source->event_queue);
+         IMFByteStream_Release(source->byte_stream);
+         wg_parser_destroy(source->wg_parser);
+@@ -1573,6 +1589,7 @@ static HRESULT WINAPI media_source_Shutdown(IMFMediaSource *iface)
+ {
+     struct media_source *source = impl_from_IMFMediaSource(iface);
+     HRESULT hr;
++    UINT i;
+ 
+     TRACE("%p.\n", iface);
+ 
+@@ -1585,6 +1602,14 @@ static HRESULT WINAPI media_source_Shutdown(IMFMediaSource *iface)
+ 
+     source->state = SOURCE_SHUTDOWN;
+ 
++    for (i = 0; i < source->stream_count; i++)
++    {
++        struct media_stream *stream = source->streams[i];
++        wg_parser_stream_disable(stream->wg_stream);
++        while (stream->busy)
++            SleepConditionVariableCS(&stream->cond, &source->cs, INFINITE);
++    }
++
+     wg_parser_disconnect(source->wg_parser);
+ 
+     source->read_thread_shutdown = true;
+diff --git a/dlls/winegstreamer/wg_parser.c b/dlls/winegstreamer/wg_parser.c
+index f017a504b39..5eb2f174a5a 100644
+--- a/dlls/winegstreamer/wg_parser.c
++++ b/dlls/winegstreamer/wg_parser.c
+@@ -284,6 +284,7 @@ static NTSTATUS wg_parser_stream_disable(void *args)
+         stream->desired_caps = NULL;
+     }
+     pthread_mutex_unlock(&parser->mutex);
++    pthread_cond_signal(&stream->event_cond);
+     pthread_cond_signal(&stream->event_empty_cond);
+     return S_OK;
+ }
+diff --git a/dlls/winegstreamer/wm_reader.c b/dlls/winegstreamer/wm_reader.c
+index 9c191a28559..f4aef699bbf 100644
+--- a/dlls/winegstreamer/wm_reader.c
++++ b/dlls/winegstreamer/wm_reader.c
+@@ -1952,7 +1952,8 @@ static HRESULT WINAPI reader_GetNextSample(IWMSyncReader2 *iface,
+     if (!stream_number && !output_number && !ret_stream_number)
+         return E_INVALIDARG;
+ 
+-    EnterCriticalSection(&reader->cs);
++    if (reader->outer == &reader->IUnknown_inner)
++        EnterCriticalSection(&reader->cs);
+ 
+     if (!stream_number)
+         stream = NULL;
+@@ -1980,7 +1981,8 @@ static HRESULT WINAPI reader_GetNextSample(IWMSyncReader2 *iface,
+     if (ret_stream_number && (hr == S_OK || stream_number))
+         *ret_stream_number = stream_number;
+ 
+-    LeaveCriticalSection(&reader->cs);
++    if (reader->outer == &reader->IUnknown_inner)
++        LeaveCriticalSection(&reader->cs);
+     return hr;
+ }
+ 
