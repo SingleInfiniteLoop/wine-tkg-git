@@ -52,8 +52,8 @@ index ff7d5d2ea70..f36f59c7542 100644
  }
  
 @@ -1392,6 +1392,7 @@ static ULONG WINAPI media_source_Release(IMFMediaSource *iface)
-     if (!ref)
      {
+         media_source_release_shutdown_callback(source);
          IMFMediaSource_Shutdown(iface);
 +        MFUnlockWorkQueue(source->async_commands_queue);
          IMFMediaEventQueue_Release(source->event_queue);
