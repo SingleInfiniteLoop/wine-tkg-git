@@ -401,9 +401,9 @@ diff --git a/include/wine/server_protocol.h b/include/wine/server_protocol.h
 index f4f45d958be..aed7090572b 100644
 --- a/include/wine/server_protocol.h
 +++ b/include/wine/server_protocol.h
-@@ -877,6 +877,12 @@ typedef struct
-     lparam_t info;
- } cursor_pos_t;
+@@ -882,6 +882,12 @@ typedef struct
+ 
+ };
  
 +struct cpu_topology_override
 +{
@@ -411,9 +411,9 @@ index f4f45d958be..aed7090572b 100644
 +    unsigned char host_cpu_id[64];
 +};
 +
- 
- 
- 
+ struct monitor_info
+ {
+     struct rectangle raw;
 @@ -970,6 +976,7 @@ struct init_process_done_request
      client_ptr_t teb;
      client_ptr_t peb;
@@ -466,7 +466,7 @@ index 430fd365508..d1b8b3fc222 100644
 --- a/server/process.h
 +++ b/server/process.h
 @@ -87,6 +87,7 @@ struct process
-     pe_image_info_t      image_info;      /* main exe image info */
+     struct pe_image_info image_info;      /* main exe image info */
      int                  esync_fd;        /* esync file descriptor (signaled on exit) */
      unsigned int         fsync_idx;
 +    struct cpu_topology_override cpu_override; /* Overridden CPUs to host CPUs mapping. */
@@ -478,8 +478,8 @@ index 48f9f4fae90..0f2fe077b80 100644
 --- a/server/protocol.def
 +++ b/server/protocol.def
 @@ -893,6 +893,12 @@ typedef struct
-     lparam_t info;
- } cursor_pos_t;
+     /* VARARG(type,unicode_str,type_len); */
+ };
  
 +struct cpu_topology_override
 +{
@@ -487,9 +487,9 @@ index 48f9f4fae90..0f2fe077b80 100644
 +    unsigned char host_cpu_id[64];
 +};
 +
- /****************************************************************/
- /* Request declarations */
- 
+ struct monitor_info
+ {
+     struct rectangle raw;     /* host / physical position of the monitor rect */
 @@ -954,6 +960,7 @@ typedef struct
  
  /* Signal the end of the process initialization */
@@ -532,7 +532,7 @@ index 0fb3aa0e727..31043c3df33 100644
 +    else if (!process->cpu_override.cpu_count)
          set_thread_affinity( current, current->affinity );
  
-     set_thread_priority( current, process->priority, current->priority );
+     set_thread_base_priority( current, current->base_priority );
 @@ -1538,11 +1549,13 @@ DECL_HANDLER(init_thread)
      current->unix_tid = req->unix_tid;
      current->teb      = req->teb;
@@ -541,7 +541,7 @@ index 0fb3aa0e727..31043c3df33 100644
  
      init_thread_context( current );
      generate_debug_event( current, DbgCreateThreadStateChange, &req->entry );
-     set_thread_priority( current, current->process->priority, current->priority );
+     set_thread_base_priority( current, current->base_priority );
 -    set_thread_affinity( current, current->affinity );
 +    if (!process->cpu_override.cpu_count)
 +        set_thread_affinity( current, current->affinity );
