@@ -10,19 +10,14 @@ diff --git a/configure b/configure
 index 7ea8b1c0ceb..03533857085 100755
 --- a/configure
 +++ b/configure
-@@ -7982,6 +7982,12 @@ if test "x$ac_cv_header_linux_filter_h" = xyes
- then :
-   printf "%s\n" "#define HAVE_LINUX_FILTER_H 1" >>confdefs.h
- 
-+fi
-+ac_fn_c_check_header_compile "$LINENO" "linux/futex.h" "ac_cv_header_linux_futex_h" "$ac_includes_default"
-+if test "x$ac_cv_header_linux_futex_h" = xyes
-+then :
-+  printf "%s\n" "#define HAVE_LINUX_FUTEX_H 1" >>confdefs.h
-+
- fi
- ac_fn_c_check_header_compile "$LINENO" "linux/hdreg.h" "ac_cv_header_linux_hdreg_h" "$ac_includes_default"
- if test "x$ac_cv_header_linux_hdreg_h" = xyes
+@@ -8750,6 +8750,7 @@
+ 	link.h \
+ 	linux/cdrom.h \
+ 	linux/filter.h \
++	linux/futex.h \
+	linux/fs.h \
+ 	linux/hdreg.h \
+ 	linux/hidraw.h \
 diff --git a/configure.ac b/configure.ac
 index 815e40fa08d..0082bd7e4a7 100644
 --- a/configure.ac
