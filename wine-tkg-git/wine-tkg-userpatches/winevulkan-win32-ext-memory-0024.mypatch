@@ -1,0 +1,96 @@
+diff --git a/dlls/winevulkan/make_vulkan b/dlls/winevulkan/make_vulkan
+index 3c528037826..1451242833f 100755
+--- a/dlls/winevulkan/make_vulkan
++++ b/dlls/winevulkan/make_vulkan
+@@ -210,6 +210,10 @@ FUNCTION_OVERRIDES = {
+ 
+     # VK_KHR_synchronization2
+     "vkQueueSubmit2KHR" : {"dispatch" : True},
++
++    # Custom functions
++    "wine_vkAcquireKeyedMutex" : {"dispatch": True},
++    "wine_vkReleaseKeyedMutex" : {"dispatch": True},
+ }
+ 
+ # functions for which a user driver entry must be generated
+@@ -296,6 +300,9 @@ MANUAL_UNIX_THUNKS = {
+     "vkSignalSemaphoreKHR",
+     "vkWaitSemaphoresKHR",
+     "vkQueueSubmit2KHR",
++    # Custom functions
++    "wine_vkAcquireKeyedMutex",
++    "wine_vkReleaseKeyedMutex",
+ }
+ 
+ # loader functions which are entirely manually implemented
+@@ -3356,6 +3363,10 @@ class VkRegistry(object):
+ 
+         root.extend(video_root)
+ 
++        tree_custom = ET.parse("vk_custom.xml")
++        root_custom = tree_custom.getroot()
++        root.extend(root_custom)
++
+         self._parse_enums(root)
+         self._parse_types(root)
+         self._parse_commands(root)
+diff --git a/dlls/winevulkan/vk_custom.xml b/dlls/winevulkan/vk_custom.xml
+new file mode 100644
+index 00000000000..a9fd68548c4
+--- /dev/null
++++ b/dlls/winevulkan/vk_custom.xml
+@@ -0,0 +1,24 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<registry>
++    <commands>
++        <command successcodes="VK_SUCCESS,VK_TIMEOUT" errorcodes="VK_ERROR_UNKNOWN">
++            <proto><type>VkResult</type> <name>wine_vkAcquireKeyedMutex</name></proto>
++            <param><type>VkDevice</type> <name>device</name></param>
++            <param><type>VkDeviceMemory</type> <name>memory</name></param>
++            <param><type>uint64_t</type> <name>key</name></param>
++            <param><type>uint32_t</type> <name>timeout_ms</name></param>
++        </command>
++        <command successcodes="VK_SUCCESS" errorcodes="VK_ERROR_UNKNOWN">
++            <proto><type>VkResult</type> <name>wine_vkReleaseKeyedMutex</name></proto>
++            <param><type>VkDevice</type> <name>device</name></param>
++            <param><type>VkDeviceMemory</type> <name>memory</name></param>
++            <param><type>uint64_t</type> <name>key</name></param>
++        </command>
++    </commands>
++    <feature api="vulkan,vulkansc" name="WINE_CUSTOM" comment="Wine custom functions.">
++        <require>
++            <command name="wine_vkAcquireKeyedMutex"/>
++            <command name="wine_vkReleaseKeyedMutex"/>
++        </require>
++    </feature>
++</registry>
+diff --git a/dlls/winevulkan/vulkan.c b/dlls/winevulkan/vulkan.c
+index 5e3cad1ab45..754cdd981c8 100644
+--- a/dlls/winevulkan/vulkan.c
++++ b/dlls/winevulkan/vulkan.c
+@@ -3188,6 +3188,8 @@ static void substitute_function_name(const char **name)
+         *name = "vkGetSemaphoreFdKHR";
+     else if (!strcmp(*name, "vkImportSemaphoreWin32HandleKHR"))
+         *name = "vkImportSemaphoreFdKHR";
++    else if (!strcmp(*name, "wine_vkAcquireKeyedMutex") || !strcmp(*name, "wine_vkReleaseKeyedMutex"))
++        *name = "vkImportSemaphoreFdKHR";
+ }
+ 
+ #ifdef _WIN64
+@@ -4624,6 +4626,16 @@ VkResult wine_vkQueueBindSparse(VkQueue queue_handle, uint32_t bind_info_count,
+     free_conversion_context(&ctx);
+     return ret;
+ }
++
++VkResult wine_wine_vkAcquireKeyedMutex(VkDevice device, VkDeviceMemory memory, uint64_t key, uint32_t timeout_ms)
++{
++    return acquire_keyed_mutex(vulkan_device_from_handle(device), wine_device_memory_from_handle(memory), key, timeout_ms);
++}
++
++VkResult wine_wine_vkReleaseKeyedMutex(VkDevice device, VkDeviceMemory memory, uint64_t key)
++{
++    return release_keyed_mutex(vulkan_device_from_handle(device), wine_device_memory_from_handle(memory), key, NULL);
++}
+ 
+ DECLSPEC_EXPORT VkDevice __wine_get_native_VkDevice(VkDevice handle)
+ {

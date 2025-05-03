@@ -61,7 +61,7 @@ index c6ab013ea0d..ad836662af0 100644
      irp->IoStatus.u.Status = STATUS_SUCCESS;
 @@ -452,6 +474,12 @@ static NTSTATUS WINAPI dispatch_ioctl(DEVICE_OBJECT *device, IRP *irp)
                                        stack->Parameters.DeviceIoControl.OutputBufferLength,
-                                       &irp->IoStatus);
+                                       &irp->IoStatus );
              break;
 +        case IOCTL_SHARED_GPU_RESOURCE_GET_INFO:
 +            status = shared_resource_get_info( res,
@@ -184,3 +184,21 @@ index d84b1135cba..85889f2d0d4 100644
              memory->access = handle_export_info ? handle_export_info->dwAccess : GENERIC_ALL;
              if (handle_export_info && handle_export_info->pAttributes)
                  memory->inherit = handle_export_info->pAttributes->bInheritHandle;
+@@ -3450,7 +3496,7 @@ VkResult wine_vkCreateSemaphore(VkDevice client_device, const VkSemaphoreCreateI
+ 
+         if ((res = device->p_vkGetSemaphoreFdKHR(device->host.device, &fd_info, &fd)) == VK_SUCCESS)
+         {
+-            object->handle = create_gpu_resource(fd, export_handle_info ? export_handle_info->name : NULL);
++            object->handle = create_gpu_resource(fd, export_handle_info ? export_handle_info->name : NULL, 0);
+             close(fd);
+         }
+ 
+@@ -3489,7 +3535,7 @@ VkResult wine_vkCreateSemaphore(VkDevice client_device, const VkSemaphoreCreateI
+ 
+         if ((res = device->p_vkGetSemaphoreFdKHR(device->host.device, &fd_info, &fd)) == VK_SUCCESS)
+         {
+-            object->handle = create_gpu_resource(fd, export_handle_info ? export_handle_info->name : NULL);
++            object->handle = create_gpu_resource(fd, export_handle_info ? export_handle_info->name : NULL, 0);
+             close(fd);
+         }
+ 

@@ -2,7 +2,7 @@ diff --git a/dlls/winevulkan/vulkan.c b/dlls/winevulkan/vulkan.c
 index 27221c594c9..3a1105cfd4d 100644
 --- a/dlls/winevulkan/vulkan.c
 +++ b/dlls/winevulkan/vulkan.c
-@@ -2941,6 +2941,16 @@ void wine_vkDestroyDeferredOperationKHR(VkDevice                     handle,
+@@ -2816,12 +2816,23 @@ void wine_vkDestroyDeferredOperationKHR(VkDevice device_handle,
      free(object);
  }
  
@@ -19,14 +19,13 @@ index 27221c594c9..3a1105cfd4d 100644
  #ifdef _WIN64
  
  NTSTATUS vk_is_available_instance_function(void *arg)
-@@ -2953,6 +2963,7 @@ NTSTATUS vk_is_available_instance_function(void *arg)
-     if (!strcmp(params->name, "vkGetPhysicalDeviceWin32PresentationSupportKHR"))
-         return instance->enable_win32_surface;
- 
+ {
+     struct is_available_instance_function_params *params = arg;
+     struct wine_instance *instance = wine_instance_from_handle(params->instance);
 +    substitute_function_name(&params->name);
-     return !!vk_funcs->p_vkGetInstanceProcAddr(instance->obj.host.instance, params->name);
- }
  
+     if (!strcmp(params->name, "vkCreateWin32SurfaceKHR"))
+         return instance->enable_win32_surface;
 @@ -2960,12 +2971,7 @@ NTSTATUS vk_is_available_device_function(void *arg)
  {
      struct is_available_device_function_params *params = arg;
@@ -75,4 +74,4 @@ index 27221c594c9..3a1105cfd4d 100644
 +    return !!vk_funcs->p_vkGetDeviceProcAddr(device->host.device, name);
  }
  
- DECLSPEC_EXPORT VkDevice __wine_get_native_VkDevice(VkDevice handle)
+ VkResult wine_vkGetMemoryWin32HandleKHR(VkDevice device, const VkMemoryGetWin32HandleInfoKHR *handle_info, HANDLE *handle)

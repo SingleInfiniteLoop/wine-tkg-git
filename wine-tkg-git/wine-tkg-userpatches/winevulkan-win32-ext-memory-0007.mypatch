@@ -116,7 +116,7 @@ index 8c3fa3764bd..c6ab013ea0d 100644
 +                                      irp->AssociatedIrp.SystemBuffer,
 +                                      stack->Parameters.DeviceIoControl.InputBufferLength,
 +                                      stack->Parameters.DeviceIoControl.OutputBufferLength,
-+                                      &irp->IoStatus);
++                                      &irp->IoStatus );
 +            break;
      default:
          FIXME( "ioctl %#lx not supported\n", stack->Parameters.DeviceIoControl.IoControlCode );
