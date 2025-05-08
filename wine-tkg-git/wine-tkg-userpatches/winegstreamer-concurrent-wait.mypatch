@@ -98,10 +98,10 @@ diff --git a/dlls/winegstreamer/wm_reader.c b/dlls/winegstreamer/wm_reader.c
 index 9c191a28559..f4aef699bbf 100644
 --- a/dlls/winegstreamer/wm_reader.c
 +++ b/dlls/winegstreamer/wm_reader.c
-@@ -1952,7 +1952,8 @@ static HRESULT WINAPI reader_GetNextSample(IWMSyncReader2 *iface,
-     if (!stream_number && !output_number && !ret_stream_number)
+@@ -1953,7 +1953,8 @@ static HRESULT WINAPI reader_GetNextSample(IWMSyncReader2 *iface,
          return E_INVALIDARG;
  
+     ReleaseSemaphore(reader->read_sem, 1, NULL);
 -    EnterCriticalSection(&reader->cs);
 +    if (reader->outer == &reader->IUnknown_inner)
 +        EnterCriticalSection(&reader->cs);
@@ -115,6 +115,6 @@ index 9c191a28559..f4aef699bbf 100644
 -    LeaveCriticalSection(&reader->cs);
 +    if (reader->outer == &reader->IUnknown_inner)
 +        LeaveCriticalSection(&reader->cs);
+     if (WaitForSingleObject(reader->read_sem, INFINITE) != WAIT_OBJECT_0)
+         ERR("Failed to wait for read thread to pause.\n");
      return hr;
- }
- 
