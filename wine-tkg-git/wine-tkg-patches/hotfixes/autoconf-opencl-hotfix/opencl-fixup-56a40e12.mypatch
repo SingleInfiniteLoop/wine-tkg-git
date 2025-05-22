@@ -13,8 +13,8 @@ index 2bb09f618c7..9cc74660864 100644
 --- a/configure.ac
 +++ b/configure.ac
 @@ -50,7 +50,7 @@ AC_ARG_WITH(netapi,    AS_HELP_STRING([--without-netapi],[do not use the Samba N
- AC_ARG_WITH(mingw,     AS_HELP_STRING([--without-mingw],[do not use the MinGW cross-compiler]))
- AC_ARG_WITH(netapi,    AS_HELP_STRING([--without-netapi],[do not use the Samba NetAPI library]))
+ AC_ARG_WITH(openal,    AS_HELP_STRING([--without-openal],[do not use OpenAL]),
+             [if test "x$withval" = "xno"; then ac_cv_header_AL_al_h=no; ac_cv_header_OpenAL_al_h=no; fi])
  AC_ARG_WITH(opencl,    AS_HELP_STRING([--without-opencl],[do not use OpenCL]),
 -            [if test "x$withval" = "xno"; then ac_cv_header_CL_cl_h=no; ac_cv_header_OpenCL_opencl_h=no; fi])
 +            [if test "x$withval" = "xno"; then ac_cv_header_CL_cl_h=no; ac_cv_header_CL_opencl_h=no; fi])
@@ -22,13 +22,13 @@ index 2bb09f618c7..9cc74660864 100644
  AC_ARG_WITH(osmesa,     AS_HELP_STRING([--without-osmesa],[do not use the OSMesa library]))
  AC_ARG_WITH(oss,       AS_HELP_STRING([--without-oss],[do not use the OSS sound support]))
 @@ -430,7 +430,6 @@ AC_CHECK_HEADERS(\
- 
  AC_CHECK_HEADERS(\
  	CL/cl.h \
+ 	EGL/egl.h \
 -	OpenCL/opencl.h \
  	arpa/inet.h \
  	arpa/nameser.h \
- 	asm/termbits.h \
+ 	asm/types.h \
 @@ -515,6 +514,8 @@ AC_CHECK_HEADERS(\
  	valgrind/memcheck.h \
  	valgrind/valgrind.h
@@ -39,8 +39,8 @@ index 2bb09f618c7..9cc74660864 100644
  
  dnl **** Checks for headers that depend on other ones ****
 @@ -754,7 +755,7 @@ case $host_os in
-         AC_SUBST(COREAUDIO_LIBS,"-framework CoreFoundation -framework CoreAudio -framework AudioUnit -framework AudioToolbox -framework CoreMIDI")
-         enable_winecoreaudio_drv=${enable_winecoreaudio_drv:-yes}
+         AC_DEFINE_UNQUOTED(HAVE_OPENAL,1,[Define to 1 if OpenAL is available])
+         ac_cv_lib_openal=yes
      fi
 -    if test "$ac_cv_header_OpenCL_opencl_h" = "yes"
 +    if test "$ac_cv_header_CL_opencl_h" = "yes"
