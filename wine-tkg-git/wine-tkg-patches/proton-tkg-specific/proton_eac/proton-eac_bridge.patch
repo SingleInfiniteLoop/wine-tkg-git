@@ -263,8 +263,8 @@ index 3d9575d83f2..a13d54ec263 100644
  
  
 @@ -405,6 +419,13 @@ enum loadorder get_load_order( const UNICODE_STRING *nt_name )
-         char *unix_path = NULL;
-         NTSTATUS status;
+         ULONG size = 256;
+         char *buffer;
  
 +        if (eac_launcher_process)
 +        {
