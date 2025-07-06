@@ -1,5 +1,5 @@
 diff --git a/dlls/mf/session.c b/dlls/mf/session.c
-index 483ea6f904f70da10bfdc5f027cf829ffe11b8e4..c86012c505649103bfb051c2276e53a027230c25 100644
+index 9294d40045d88a6b4bcbcfbcb51cb265bb498087..414d4301eb4c3dcf209465e3898528735fb36869 100644
 --- a/dlls/mf/session.c
 +++ b/dlls/mf/session.c
 @@ -222,6 +222,7 @@ enum presentation_flags
@@ -10,7 +10,7 @@ index 483ea6f904f70da10bfdc5f027cf829ffe11b8e4..c86012c505649103bfb051c2276e53a0
  };
  
  struct media_session
-@@ -1006,6 +1007,42 @@ static HRESULT session_subscribe_sources(struct media_session *session)
+@@ -1008,6 +1009,42 @@ static HRESULT session_subscribe_sources(struct media_session *session)
      return hr;
  }
  
@@ -53,7 +53,7 @@ index 483ea6f904f70da10bfdc5f027cf829ffe11b8e4..c86012c505649103bfb051c2276e53a0
  static void session_flush_nodes(struct media_session *session)
  {
      struct topo_node *node;
-@@ -1071,18 +1108,50 @@ static void session_start(struct media_session *session, const GUID *time_format
+@@ -1079,18 +1116,50 @@ static void session_start(struct media_session *session, const GUID *time_format
  
      switch (session->state)
      {
@@ -109,7 +109,7 @@ index 483ea6f904f70da10bfdc5f027cf829ffe11b8e4..c86012c505649103bfb051c2276e53a0
              session->presentation.time_format = *time_format;
              session->presentation.start_position.vt = VT_EMPTY;
              PropVariantCopy(&session->presentation.start_position, start_position);
-@@ -1117,38 +1186,7 @@ static void session_start(struct media_session *session, const GUID *time_format
+@@ -1125,38 +1194,7 @@ static void session_start(struct media_session *session, const GUID *time_format
  
              session->state = SESSION_STATE_STARTING_SOURCES;
              break;
@@ -126,7 +126,7 @@ index 483ea6f904f70da10bfdc5f027cf829ffe11b8e4..c86012c505649103bfb051c2276e53a0
 -                    return;
 -                }
 -            }
- 
+-
 -            /* Stop sources */
 -            LIST_FOR_EACH_ENTRY(source, &session->presentation.sources, struct media_source, entry)
 -            {
@@ -141,14 +141,14 @@ index 483ea6f904f70da10bfdc5f027cf829ffe11b8e4..c86012c505649103bfb051c2276e53a0
 -            session->presentation.time_format = *time_format;
 -            session->presentation.start_position.vt = VT_EMPTY;
 -            PropVariantCopy(&session->presentation.start_position, start_position);
--
+ 
 -            /* SESSION_STATE_STARTED -> SESSION_STATE_RESTARTING_SOURCES -> SESSION_STATE_STARTED */
 -            session->state = SESSION_STATE_RESTARTING_SOURCES;
 -            break;
          default:
              session_command_complete_with_event(session, MESessionStarted, MF_E_INVALIDREQUEST, NULL);
              break;
-@@ -1445,7 +1483,7 @@ static void session_set_consumed_clock(IUnknown *object, IMFPresentationClock *c
+@@ -1453,7 +1491,7 @@ static void session_set_consumed_clock(IUnknown *object, IMFPresentationClock *c
      }
  }
  
@@ -157,7 +157,7 @@ index 483ea6f904f70da10bfdc5f027cf829ffe11b8e4..c86012c505649103bfb051c2276e53a0
  {
      IMFPresentationTimeSource *time_source = NULL;
      struct media_source *source;
-@@ -1453,10 +1491,13 @@ static void session_set_presentation_clock(struct media_session *session)
+@@ -1461,10 +1499,13 @@ static void session_set_presentation_clock(struct media_session *session)
      struct topo_node *node;
      HRESULT hr;
  
@@ -174,40 +174,30 @@ index 483ea6f904f70da10bfdc5f027cf829ffe11b8e4..c86012c505649103bfb051c2276e53a0
      }
  
      if (!(session->presentation.flags & SESSION_FLAG_PRESENTATION_CLOCK_SET))
-@@ -1570,7 +1611,7 @@ static void session_complete_rate_change(struct media_session *session)
+@@ -1579,7 +1620,7 @@ static void session_complete_rate_change(struct media_session *session)
          return;
  
      session->presentation.flags &= ~SESSION_FLAG_PENDING_RATE_CHANGE;
 -    session_set_presentation_clock(session);
 +    session_set_presentation_clock(session, FALSE);
  
-     hr = IMFRateControl_SetRate(session->clock_rate_control, session->presentation.thin,
-             session->presentation.rate);
-@@ -3201,6 +3242,7 @@ static void session_set_source_object_state(struct media_session *session, IUnkn
+     session->presentation.thin_committed = session->presentation.thin;
+ 
+@@ -3212,10 +3253,13 @@ static void session_set_source_object_state(struct media_session *session, IUnkn
      BOOL changed = FALSE;
      DWORD i, count;
      HRESULT hr;
-+    BOOL seeking = FALSE;
++    BOOL seeking;
  
      if ((state = session_get_object_state_for_event(event_type)) == OBJ_STATE_INVALID)
          return;
-@@ -3208,6 +3250,7 @@ static void session_set_source_object_state(struct media_session *session, IUnkn
+ 
++    seeking = (event_type == MESourceSeeked || event_type == MEStreamSeeked);
++
      switch (event_type)
      {
          case MESourceSeeked:
-+            seeking = TRUE;
-         case MESourceStarted:
-         case MESourcePaused:
-         case MESourceStopped:
-@@ -3223,6 +3266,7 @@ static void session_set_source_object_state(struct media_session *session, IUnkn
-             }
-             break;
-         case MEStreamSeeked:
-+            seeking = TRUE;
-         case MEStreamStarted:
-         case MEStreamPaused:
-         case MEStreamStopped:
-@@ -3243,16 +3287,7 @@ static void session_set_source_object_state(struct media_session *session, IUnkn
+@@ -3254,16 +3298,7 @@ static void session_set_source_object_state(struct media_session *session, IUnkn
  
              session_set_topo_status(session, S_OK, MF_TOPOSTATUS_STARTED_SOURCE);
  
@@ -225,7 +215,7 @@ index 483ea6f904f70da10bfdc5f027cf829ffe11b8e4..c86012c505649103bfb051c2276e53a0
  
              if ((session->presentation.flags & SESSION_FLAG_NEEDS_PREROLL) && session_is_output_nodes_state(session, OBJ_STATE_STOPPED))
              {
-@@ -3288,15 +3323,37 @@ static void session_set_source_object_state(struct media_session *session, IUnkn
+@@ -3299,15 +3334,37 @@ static void session_set_source_object_state(struct media_session *session, IUnkn
                  }
                  session->state = SESSION_STATE_PREROLLING_SINKS;
              }
@@ -267,7 +257,7 @@ index 483ea6f904f70da10bfdc5f027cf829ffe11b8e4..c86012c505649103bfb051c2276e53a0
              /* Start sources */
              LIST_FOR_EACH_ENTRY(source, &session->presentation.sources, struct media_source, entry)
 diff --git a/dlls/mf/tests/mf.c b/dlls/mf/tests/mf.c
-index 37c1b0be456b88fc5e1a5546a4a43bc4c75bde49..420faf883491ccfff6c8629477403cd3120f8f84 100644
+index 1070e9c1b2dbc0ba7bc1f71fc26aa31824c8961a..a02f2859f91f697a60c5e8fd6f64bd5c1faaa71c 100644
 --- a/dlls/mf/tests/mf.c
 +++ b/dlls/mf/tests/mf.c
 @@ -720,6 +720,8 @@ static const struct test_handler test_handler = {.IMFMediaTypeHandler_iface.lpVt
@@ -473,7 +463,7 @@ index 37c1b0be456b88fc5e1a5546a4a43bc4c75bde49..420faf883491ccfff6c8629477403cd3
 +    if (expect_test_stream_sink_ProcessSample)
 +        hr = S_OK;
 +    else
-+        hr = E_NOTIMPL; 
++        hr = E_NOTIMPL;
 +
 +    CHECK_EXPECT(test_stream_sink_ProcessSample);
 +    add_object_state(&actual_object_state_record, SINK_PROCESS_SAMPLE);
@@ -703,7 +693,7 @@ index 37c1b0be456b88fc5e1a5546a4a43bc4c75bde49..420faf883491ccfff6c8629477403cd3
  
      return S_OK;
  }
-@@ -1641,10 +1784,6 @@ static HRESULT WINAPI test_seek_source_Start(IMFMediaSource *iface, IMFPresentat
+@@ -1678,10 +1821,6 @@ static HRESULT WINAPI test_source_Start(IMFMediaSource *iface, IMFPresentationDe
  
      EnterCriticalSection(&source->cs);
  
@@ -714,7 +704,7 @@ index 37c1b0be456b88fc5e1a5546a4a43bc4c75bde49..420faf883491ccfff6c8629477403cd3
      for (i = 0; i < source->stream_count; ++i)
      {
          if (!is_stream_selected(pd, i))
-@@ -1657,12 +1796,16 @@ static HRESULT WINAPI test_seek_source_Start(IMFMediaSource *iface, IMFPresentat
+@@ -1694,12 +1833,16 @@ static HRESULT WINAPI test_source_Start(IMFMediaSource *iface, IMFPresentationDe
          hr = IMFMediaEventQueue_QueueEventParamVar(source->event_queue, event_type, &GUID_NULL, S_OK, &var);
          ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
  
@@ -733,7 +723,7 @@ index 37c1b0be456b88fc5e1a5546a4a43bc4c75bde49..420faf883491ccfff6c8629477403cd3
      source->state = SOURCE_RUNNING;
  
      LeaveCriticalSection(&source->cs);
-@@ -1714,10 +1857,6 @@ static HRESULT WINAPI test_seek_source_Pause(IMFMediaSource *iface)
+@@ -1751,10 +1894,6 @@ static HRESULT WINAPI test_source_Pause(IMFMediaSource *iface)
  
      EnterCriticalSection(&source->cs);
  
@@ -744,7 +734,7 @@ index 37c1b0be456b88fc5e1a5546a4a43bc4c75bde49..420faf883491ccfff6c8629477403cd3
      for (i = 0; i < source->stream_count; ++i)
      {
          if (!is_stream_selected(source->pd, i))
-@@ -1729,6 +1868,10 @@ static HRESULT WINAPI test_seek_source_Pause(IMFMediaSource *iface)
+@@ -1766,6 +1905,10 @@ static HRESULT WINAPI test_source_Pause(IMFMediaSource *iface)
          ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
      }
  
@@ -755,7 +745,7 @@ index 37c1b0be456b88fc5e1a5546a4a43bc4c75bde49..420faf883491ccfff6c8629477403cd3
      source->state = SOURCE_PAUSED;
      LeaveCriticalSection(&source->cs);
  
-@@ -3811,10 +3954,10 @@ static void test_sample_grabber_is_mediatype_supported(void)
+@@ -3997,10 +4140,10 @@ static void test_sample_grabber_is_mediatype_supported(void)
      IMFSampleGrabberSinkCallback_Release(grabber_callback);
  }
  
@@ -769,7 +759,7 @@ index 37c1b0be456b88fc5e1a5546a4a43bc4c75bde49..420faf883491ccfff6c8629477403cd3
      IMFPresentationDescriptor *pd;
      IMFTopology *topology = NULL;
      IMFStreamDescriptor *sd;
-@@ -3831,8 +3974,24 @@ static IMFTopology *create_test_topology(IMFMediaSource *source, IMFActivate *si
+@@ -4017,8 +4160,24 @@ static IMFTopology *create_test_topology(IMFMediaSource *source, IMFActivate *si
      ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
      hr = IMFTopology_AddNode(topology, src_node);
      ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
@@ -796,7 +786,7 @@ index 37c1b0be456b88fc5e1a5546a4a43bc4c75bde49..420faf883491ccfff6c8629477403cd3
      hr = IMFMediaSource_CreatePresentationDescriptor(source, &pd);
      ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
      hr = IMFPresentationDescriptor_GetStreamDescriptorByIndex(pd, 0, &selected, &sd);
-@@ -3844,7 +4003,7 @@ static IMFTopology *create_test_topology(IMFMediaSource *source, IMFActivate *si
+@@ -4030,7 +4189,7 @@ static IMFTopology *create_test_topology(IMFMediaSource *source, IMFActivate *si
          ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
      }
      init_source_node(source, -1, src_node, pd, sd);
@@ -805,7 +795,7 @@ index 37c1b0be456b88fc5e1a5546a4a43bc4c75bde49..420faf883491ccfff6c8629477403cd3
      ok(hr == S_OK, "Failed to set object, hr %#lx.\n", hr);
      hr = IMFTopologyNode_SetUINT32(sink_node, &MF_TOPONODE_CONNECT_METHOD, MF_CONNECT_ALLOW_DECODER);
      ok(hr == S_OK, "Failed to set connect method, hr %#lx.\n", hr);
-@@ -3858,6 +4017,11 @@ static IMFTopology *create_test_topology(IMFMediaSource *source, IMFActivate *si
+@@ -4044,6 +4203,11 @@ static IMFTopology *create_test_topology(IMFMediaSource *source, IMFActivate *si
      return topology;
  }
  
@@ -817,7 +807,7 @@ index 37c1b0be456b88fc5e1a5546a4a43bc4c75bde49..420faf883491ccfff6c8629477403cd3
  static void test_sample_grabber_orientation(GUID subtype)
  {
      media_type_desc video_rgb32_desc =
-@@ -4221,21 +4385,27 @@ static void test_sar(void)
+@@ -4407,21 +4571,27 @@ static void test_sar(void)
  
      IMFPresentationClock *present_clock, *present_clock2;
      IMFMediaType *mediatype, *mediatype2, *mediatype3;
@@ -846,7 +836,7 @@ index 37c1b0be456b88fc5e1a5546a4a43bc4c75bde49..420faf883491ccfff6c8629477403cd3
      GUID guid;
      BOOL mute;
      LONG ref;
-@@ -4457,6 +4627,7 @@ if (SUCCEEDED(hr))
+@@ -4643,6 +4813,7 @@ if (SUCCEEDED(hr))
      hr = IMFMediaTypeHandler_GetCurrentMediaType(handler, &mediatype);
      ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
      ok(mediatype == mediatype2, "Unexpected instance.\n");
@@ -854,60 +844,54 @@ index 37c1b0be456b88fc5e1a5546a4a43bc4c75bde49..420faf883491ccfff6c8629477403cd3
      IMFMediaType_Release(mediatype);
  
      IMFMediaType_Release(mediatype2);
-@@ -4498,45 +4669,156 @@ if (SUCCEEDED(hr))
+@@ -4684,48 +4855,159 @@ if (SUCCEEDED(hr))
      hr = IMFClockStateSink_OnClockStop(state_sink, 0);
      ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
  
 -    IMFClockStateSink_Release(state_sink);
-+    callback = create_test_callback(TRUE);
- 
+-
 -    IMFStreamSink_Release(stream_sink);
-+    /* Flush events */
-+    while (SUCCEEDED(IMFStreamSink_GetEvent(stream_sink, MF_EVENT_FLAG_NO_WAIT, &event)))
-+        IMFMediaEvent_Release(event);
++    callback = create_test_callback(TRUE);
  
 -    /* Volume control */
 -    hr = MFGetService((IUnknown *)sink, &MR_POLICY_VOLUME_SERVICE, &IID_IMFSimpleAudioVolume, (void **)&simple_volume);
 -    ok(hr == S_OK, "Failed to get interface, hr %#lx.\n", hr);
-+    hr = IMFClockStateSink_OnClockStart(state_sink, 0, 0);
-+    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
++    /* Flush events */
++    while (SUCCEEDED(IMFStreamSink_GetEvent(stream_sink, MF_EVENT_FLAG_NO_WAIT, &event)))
++        IMFMediaEvent_Release(event);
  
 -    hr = IMFSimpleAudioVolume_GetMute(simple_volume, &mute);
-+    propvar.vt = VT_EMPTY;
-+    hr = gen_wait_media_event((IMFMediaEventGenerator*)stream_sink, callback, MEStreamSinkStarted, 1000, &propvar);
++    hr = IMFClockStateSink_OnClockStart(state_sink, 0, 0);
      ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
  
 -    IMFSimpleAudioVolume_Release(simple_volume);
-+    hr = gen_wait_media_event((IMFMediaEventGenerator*)stream_sink, callback, MEStreamSinkRequestSample, 1000, &propvar);
-+    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
- 
+-
 -    hr = MFGetService((IUnknown *)sink, &MR_STREAM_VOLUME_SERVICE, &IID_IMFAudioStreamVolume, (void **)&stream_volume);
 -    ok(hr == S_OK, "Failed to get interface, hr %#lx.\n", hr);
-+    hr = MFCreateMemoryBuffer(bytes_per_second, &buffer);
++    propvar.vt = VT_EMPTY;
++    hr = gen_wait_media_event((IMFMediaEventGenerator*)stream_sink, callback, MEStreamSinkStarted, 1000, &propvar);
 +    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
  
 -    hr = IMFAudioStreamVolume_GetChannelCount(stream_volume, &channel_count);
-+    hr = IMFMediaBuffer_Lock(buffer, &buff, NULL, NULL);
-+    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
-+    memset(buff, 0, bytes_per_second);
-+    hr = IMFMediaBuffer_Unlock(buffer);
++    hr = gen_wait_media_event((IMFMediaEventGenerator*)stream_sink, callback, MEStreamSinkRequestSample, 1000, &propvar);
      ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
  
 -    hr = IMFAudioStreamVolume_GetChannelCount(stream_volume, NULL);
 -    ok(hr == E_POINTER, "Unexpected hr %#lx.\n", hr);
-+    hr = IMFMediaBuffer_SetCurrentLength(buffer, bytes_per_second);
++    hr = MFCreateMemoryBuffer(bytes_per_second, &buffer);
 +    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
  
 -    IMFAudioStreamVolume_Release(stream_volume);
-+    hr = MFCreateSample(&sample);
++    hr = IMFMediaBuffer_Lock(buffer, &buff, NULL, NULL);
 +    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
-+    hr = IMFSample_AddBuffer(sample, buffer);
++    memset(buff, 0, bytes_per_second);
++    hr = IMFMediaBuffer_Unlock(buffer);
 +    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
  
 -    hr = MFGetService((IUnknown *)sink, &MR_AUDIO_POLICY_SERVICE, &IID_IMFAudioPolicy, (void **)&unk);
 -    ok(hr == S_OK, "Failed to get interface, hr %#lx.\n", hr);
 -    IUnknown_Release(unk);
-+    hr = IMFSample_SetSampleTime(sample, 0);
++    hr = IMFMediaBuffer_SetCurrentLength(buffer, bytes_per_second);
 +    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
  
 -    /* Shutdown */
@@ -915,17 +899,27 @@ index 37c1b0be456b88fc5e1a5546a4a43bc4c75bde49..420faf883491ccfff6c8629477403cd3
 -    hr = IMFMediaSink_Shutdown(sink);
 -    ok(hr == S_OK, "Failed to shut down, hr %#lx.\n", hr);
 -    EXPECT_REF(present_clock, 1);
-+    hr = IMFStreamSink_ProcessSample(stream_sink, sample);
++    hr = MFCreateSample(&sample);
 +    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
-+    IMFSample_Release(sample);
++    hr = IMFSample_AddBuffer(sample, buffer);
++    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
  
 -    hr = IMFMediaSink_Shutdown(sink);
 -    ok(hr == MF_E_SHUTDOWN, "Unexpected hr %#lx.\n", hr);
-+    hr = gen_wait_media_event((IMFMediaEventGenerator*)stream_sink, callback, MEStreamSinkRequestSample, 1000, &propvar);
++    hr = IMFSample_SetSampleTime(sample, 0);
 +    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
  
 -    hr = IMFMediaSink_AddStreamSink(sink, 123, NULL, &stream_sink);
 -    ok(hr == MF_E_SHUTDOWN, "Unexpected hr %#lx.\n", hr);
++    hr = IMFStreamSink_ProcessSample(stream_sink, sample);
++    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
++    IMFSample_Release(sample);
+ 
+-    hr = IMFMediaSink_RemoveStreamSink(sink, 0);
+-    ok(hr == MF_E_SHUTDOWN, "Unexpected hr %#lx.\n", hr);
++    hr = gen_wait_media_event((IMFMediaEventGenerator*)stream_sink, callback, MEStreamSinkRequestSample, 1000, &propvar);
++    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
++
 +    hr = MFCreateSample(&sample);
 +    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
 +    hr = IMFSample_AddBuffer(sample, buffer);
@@ -1033,10 +1027,13 @@ index 37c1b0be456b88fc5e1a5546a4a43bc4c75bde49..420faf883491ccfff6c8629477403cd3
 +
 +    hr = IMFMediaSink_AddStreamSink(sink, 123, NULL, &stream_sink);
 +    ok(hr == MF_E_SHUTDOWN, "Unexpected hr %#lx.\n", hr);
++
++    hr = IMFMediaSink_RemoveStreamSink(sink, 0);
++    ok(hr == MF_E_SHUTDOWN, "Unexpected hr %#lx.\n", hr);
  
-     hr = IMFMediaSink_RemoveStreamSink(sink, 0);
-     ok(hr == MF_E_SHUTDOWN, "Unexpected hr %#lx.\n", hr);
-@@ -6410,7 +6692,6 @@ static void test_media_session_Start(void)
+     hr = IMFMediaSink_GetStreamSinkCount(sink, NULL);
+     ok(hr == E_POINTER, "Unexpected hr %#lx.\n", hr);
+@@ -6596,7 +6878,6 @@ static void test_media_session_Start(void)
          ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
          hr = wait_media_event(session, callback, MESessionStarted, 5000, &propvar);
          ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
@@ -1044,7 +1041,7 @@ index 37c1b0be456b88fc5e1a5546a4a43bc4c75bde49..420faf883491ccfff6c8629477403cd3
          compare_object_states(&actual_object_state_record, &expected_object_state_records[initial_state]);
  
          hr = IMFMediaSession_Stop(session);
-@@ -6802,6 +7083,635 @@ static void test_network_bytestream(void)
+@@ -7130,6 +7411,635 @@ static void test_media_session_thinning(void)
      ok(hr == S_OK, "Shutdown failure, hr %#lx.\n", hr);
  }
  
@@ -1438,8 +1435,8 @@ index 37c1b0be456b88fc5e1a5546a4a43bc4c75bde49..420faf883491ccfff6c8629477403cd3
 +    MFT_OUTPUT_STREAM_INFO output_stream_info = {0};
 +    struct test_handler handler = test_handler;
 +    IMFPresentationClock *presentation_clock;
-+    struct test_seek_source *media_source;
 +    struct test_callback *test_callback;
++    struct test_source *media_source;
 +    IMFAsyncCallback *callback;
 +    IMFMediaSession *session;
 +    IMFMediaSource *source;
@@ -1463,8 +1460,8 @@ index 37c1b0be456b88fc5e1a5546a4a43bc4c75bde49..420faf883491ccfff6c8629477403cd3
 +    hr = MFCreateMediaSession(NULL, &session);
 +    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
 +
-+    source = create_test_seek_source(TRUE);
-+    media_source = impl_test_seek_source_from_IMFMediaSource(source);
++    source = create_test_source(TRUE);
++    media_source = impl_test_source_from_IMFMediaSource(source);
 +    for (i = 0; i < media_source->stream_count; i++)
 +        media_source->streams[i]->test_expect = TRUE;
 +
@@ -1680,24 +1677,25 @@ index 37c1b0be456b88fc5e1a5546a4a43bc4c75bde49..420faf883491ccfff6c8629477403cd3
  START_TEST(mf)
  {
      init_functions();
-@@ -6838,4 +7748,5 @@ START_TEST(mf)
-     test_media_session_Close();
+@@ -7167,4 +8077,5 @@ START_TEST(mf)
      test_network_bytestream();
      test_media_session_source_shutdown();
+     test_media_session_thinning();
 +    test_media_session_seek();
  }
 diff --git a/dlls/mfmediaengine/video_frame_sink.c b/dlls/mfmediaengine/video_frame_sink.c
-index 23d8e19e71e5ede40b1f9f358e4af718ca3ce1a1..3e377bbc2bb751324ec75016292bb694586cb0bd 100644
+index 9fb81854130343b167b8eeedc00925c0500d8ca9..f710466fed4c0c1598efa1c51951de10e963c264 100644
 --- a/dlls/mfmediaengine/video_frame_sink.c
 +++ b/dlls/mfmediaengine/video_frame_sink.c
-@@ -1012,11 +1012,8 @@ static HRESULT video_frame_sink_set_state(struct video_frame_sink *sink, enum si
+@@ -1012,11 +1012,9 @@ static HRESULT video_frame_sink_set_state(struct video_frame_sink *sink, enum si
                  video_frame_sink_set_flag(sink, FLAGS_FIRST_FRAME, FALSE);
              }
  
 -            if (state == SINK_STATE_RUNNING && sink->state != SINK_STATE_RUNNING)
 -            {
 -                video_frame_sink_sample_queue_flush(sink);
-+            if (state == SINK_STATE_RUNNING && (sink->state != SINK_STATE_RUNNING || offset != PRESENTATION_CURRENT_POSITION))
++            if (state == SINK_STATE_RUNNING && (sink->state == SINK_STATE_STOPPED || sink->state == SINK_STATE_PAUSED ||
++                    (sink->state == SINK_STATE_RUNNING && offset != PRESENTATION_CURRENT_POSITION)))
                  video_frame_sink_stream_request_sample(sink);
 -            }
  
