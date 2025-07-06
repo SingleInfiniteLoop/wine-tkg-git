@@ -20,9 +20,9 @@ index 984af2d4a21..48bfaf3cf99 100644
 --- a/dlls/ntdll/unix/virtual.c
 +++ b/dlls/ntdll/unix/virtual.c
 @@ -133,6 +133,8 @@ struct file_view
-          } \
-     } while (0);
-
+     unsigned int  protect;       /* protection for all pages at allocation time and SEC_* flags */
+ };
+ 
 +#define SYMBOLIC_LINK_QUERY 0x0001
 +
  /* per-page protection flags */
