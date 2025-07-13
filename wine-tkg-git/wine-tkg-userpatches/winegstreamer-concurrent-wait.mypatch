@@ -12,62 +12,36 @@ index ff7d5d2ea70..f36f59c7542 100644
  };
  
  enum source_async_op
-@@ -805,16 +808,33 @@ static HRESULT wait_on_sample(struct media_stream *stream, IUnknown *token)
- {
-     struct media_source *source = impl_from_IMFMediaSource(stream->media_source);
-     struct wg_parser_buffer buffer;
-+    BOOL ret;
+@@ -793,9 +793,12 @@
+     wg_parser_t wg_parser = source->wg_parser;
+     bool ret;
  
-     TRACE("%p, %p\n", stream, token);
++    stream->busy = TRUE;
+     LeaveCriticalSection(&source->cs);
+     ret = wg_parser_stream_get_buffer(wg_parser, wg_stream, buffer);
+     EnterCriticalSection(&source->cs);
++    stream->busy = FALSE;
++    WakeConditionVariable(&stream->cond);
  
--    while (wg_parser_stream_get_buffer(source->wg_parser, stream->wg_stream, &buffer))
-+    do
-     {
--        HRESULT hr = media_stream_send_sample(stream, &buffer, token);
--        if (hr != S_FALSE)
--            return hr;
--    }
-+        stream->busy = TRUE;
-+        LeaveCriticalSection(&source->cs);
-+        ret = wg_parser_stream_get_buffer(source->wg_parser, stream->wg_stream, &buffer);
-+        EnterCriticalSection(&source->cs);
-+        stream->busy = FALSE;
-+        WakeConditionVariable(&stream->cond);
-+
-+        if (source->state == SOURCE_SHUTDOWN)
-+        {
-+            WARN("media source has been shutdown, returning\n");
-+            return MF_E_SHUTDOWN;
-+        }
- 
-+        if (ret)
-+        {
-+            HRESULT hr = media_stream_send_sample(stream, &buffer, token);
-+            if (hr != S_FALSE)
-+                return hr;
-+        }
-+    } while (ret);
-+
-     return media_stream_send_eos(source, stream);
+     return ret;
  }
- 
-@@ -1392,6 +1392,7 @@ static ULONG WINAPI media_source_Release(IMFMediaSource *iface)
+@@ -1391,6 +1397,7 @@ static ULONG WINAPI media_source_Release(IMFMediaSource *iface)
+     if (!ref)
      {
-         media_source_release_shutdown_callback(source);
          IMFMediaSource_Shutdown(iface);
 +        MFUnlockWorkQueue(source->async_commands_queue);
          IMFMediaEventQueue_Release(source->event_queue);
          IMFByteStream_Release(source->byte_stream);
          wg_parser_destroy(source->wg_parser);
-@@ -1573,6 +1589,7 @@ static HRESULT WINAPI media_source_Shutdown(IMFMediaSource *iface)
+@@ -1572,6 +1579,7 @@ static HRESULT WINAPI media_source_Shutdown(IMFMediaSource *iface)
+ static HRESULT WINAPI media_source_Shutdown(IMFMediaSource *iface)
  {
      struct media_source *source = impl_from_IMFMediaSource(iface);
-     HRESULT hr;
 +    UINT i;
  
      TRACE("%p.\n", iface);
  
-@@ -1585,6 +1602,14 @@ static HRESULT WINAPI media_source_Shutdown(IMFMediaSource *iface)
+@@ -1585,6 +1593,14 @@ static HRESULT WINAPI media_source_Shutdown(IMFMediaSource *iface)
  
      source->state = SOURCE_SHUTDOWN;
  
