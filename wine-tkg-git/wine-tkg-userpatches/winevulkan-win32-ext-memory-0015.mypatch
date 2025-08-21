@@ -82,6 +82,6 @@ index 3af7eb25cef..fe989bbf809 100644
      VULKAN_OBJECT_HEADER( VkPhysicalDevice, physical_device );
      struct vulkan_instance *instance;
 +    uint32_t api_version;
+     bool has_swapchain_maintenance1;
  };
  
- static inline struct vulkan_physical_device *vulkan_physical_device_from_handle( VkPhysicalDevice handle )

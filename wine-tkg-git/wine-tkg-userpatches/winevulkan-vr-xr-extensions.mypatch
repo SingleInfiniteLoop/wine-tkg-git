@@ -54,7 +54,7 @@ index e7d00813a42..f1da22dc772 100644
  {
      struct wine_phys_dev *phys_dev = wine_phys_dev_from_handle(client_physical_device);
 +    static const char *wine_xr_extension_name = "VK_WINE_openxr_device_extensions";
--    const char *extra_extensions[2], * const*extensions = src->ppEnabledExtensionNames;
+-    const char *extra_extensions[3], * const*extensions = src->ppEnabledExtensionNames;
 +    const char *extra_extensions[64], * const*extensions = src->ppEnabledExtensionNames;
      unsigned int i, extra_count = 0, extensions_count = src->enabledExtensionCount;
 +    unsigned int j, remove_count = 0;
