@@ -546,7 +546,7 @@ index 0fb3aa0e727..31043c3df33 100644
 +    if (!process->cpu_override.cpu_count)
 +        set_thread_affinity( current, current->affinity );
  
-     reply->suspend = (current->suspend || current->process->suspend || current->context != NULL);
+     reply->suspend = (is_thread_suspended( current ) || current->context != NULL);
  }
 diff --git a/server/trace.c b/server/trace.c
 index e3a29beb6da..7df5681357b 100644
