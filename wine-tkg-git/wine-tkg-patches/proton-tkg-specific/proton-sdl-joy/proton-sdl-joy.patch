@@ -36,7 +36,7 @@ index 2a583871f1a..1af7b5070f6 100644
 +    ext->bus_name           = bus_name;
      ext->device             = device;
      ext->desc               = *desc;
-     ext->index              = get_device_index(desc);
+     ext->index              = get_device_index(desc, &before);
 @@ -333,6 +335,17 @@ static DEVICE_OBJECT *bus_find_unix_device(struct unix_device *unix_device)
      return NULL;
  }
@@ -74,9 +74,9 @@ index 2a583871f1a..1af7b5070f6 100644
  }
 
 @@ -574,7 +587,20 @@ static DWORD CALLBACK bus_main_thread(void *args)
-                 break;
-             }
-
+             TRACE("creating %shidraw device %04x:%04x with usages %04x:%04x\n", desc.is_hidraw ? "" : "non-",
+                   desc.vid, desc.pid, usages.UsagePage, usages.Usage);
+ 
 -            device = bus_create_hid_device(&event->device_created.desc, event->device);
 +            RtlEnterCriticalSection(&device_list_cs);
 +            if (!wcscmp(bus.name, L"SDL"))
@@ -108,19 +108,22 @@ diff --git a/dlls/winebus.sys/bus_udev.c b/dlls/winebus.sys/bus_udev.c
 index 2269f5b904e..334373f82e6 100644
 --- a/dlls/winebus.sys/bus_udev.c
 +++ b/dlls/winebus.sys/bus_udev.c
-@@ -1287,7 +1287,12 @@ static void udev_add_device(struct udev_device *dev, int fd)
+@@ -1286,8 +1286,14 @@ static void udev_add_device(struct udev_device *dev, int fd)
+         impl->button_map[i] = ++impl->button_count;
      }
 
-     if (is_xbox_gamepad(desc.vid, desc.pid))
--        desc.is_gamepad = TRUE;
+-    if (is_xbox_gamepad(desc.vid, desc.pid)) desc.is_gamepad = TRUE;
+-    else if (axis_count == 6 && button_count >= (impl->hat_count ? 10 : 14)) desc.is_gamepad = TRUE;
++    if (is_xbox_gamepad(desc.vid, desc.pid))
 +    {
 +        /* SDL handles xbox (and steam) controllers */
 +        TRACE("hidraw %s: ignoring %s, xbox gamepad\n", debugstr_a(devnode), debugstr_device_desc(&desc));
 +        close(fd);
-+        return;
++        return STATUS_NOT_SUPPORTED;
 +    }
- #ifdef HAS_PROPER_INPUT_HEADER
-     else
++    if (axis_count == 6 && button_count >= (impl->hat_count ? 10 : 14)) desc.is_gamepad = TRUE; 
+ 
+     if ((impl->is_gamepad = desc.is_gamepad))
      {
 From 9d9d0ea6f5041b6f10a3ee031d2b0e72818841cb Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
@@ -137,7 +140,7 @@ index 334373f82e6..4d1124f5cc4 100644
 --- a/dlls/winebus.sys/bus_udev.c
 +++ b/dlls/winebus.sys/bus_udev.c
 @@ -1286,6 +1286,13 @@ static void udev_add_device(struct udev_device *dev, int fd)
-         memcpy(desc.serialnumber, zeros, sizeof(zeros));
+         impl->button_map[i] = ++impl->button_count;
      }
 
 +    if (is_steam_controller(desc.vid, desc.pid))
@@ -145,7 +148,7 @@ index 334373f82e6..4d1124f5cc4 100644
 +        /* this device is being used as a virtual Steam controller */
 +        TRACE("hidraw %s: ignoring %s, steam controller\n", debugstr_a(devnode), debugstr_device_desc(&desc));
 +        close(fd);
-+        return;
++        return STATUS_NOT_SUPPORTED;
 +    }
      if (is_xbox_gamepad(desc.vid, desc.pid))
      {
@@ -155,7 +158,7 @@ index 1269ae05c2b..e88d2181446 100644
 --- a/dlls/winebus.sys/unixlib.h
 +++ b/dlls/winebus.sys/unixlib.h
 @@ -151,6 +151,19 @@
-                             desc->vid, desc->pid, desc->version, desc->input, desc->uid, desc->is_gamepad, desc->is_hidraw);
+                             desc->is_gamepad, desc->is_hidraw, desc->is_bluetooth);
  }
 
 +static inline BOOL is_steam_controller(WORD vid, WORD pid)
@@ -190,11 +193,14 @@ diff --git a/dlls/winebus.sys/bus_sdl.c b/dlls/winebus.sys/bus_sdl.c
 index 37d75d0bc95..7dfa8edb3b5 100644
 --- a/dlls/winebus.sys/bus_sdl.c
 +++ b/dlls/winebus.sys/bus_sdl.c
-@@ -862,16 +862,8 @@ static void sdl_add_device(unsigned int index)
+@@ -862,19 +862,8 @@ static void sdl_add_device(unsigned int index)
          return;
      }
-
--    if (options.map_controllers && pSDL_IsGameController(index))
+ 
+-    joystick_type = pSDL_JoystickGetType(joystick);
+-    if (options->map_controllers && pSDL_IsGameController(index)
+-            && joystick_type != SDL_JOYSTICK_TYPE_WHEEL
+-            && joystick_type != SDL_JOYSTICK_TYPE_FLIGHT_STICK)
 -        controller = pSDL_GameControllerOpen(index);
 -
 -    if (controller) product = pSDL_GameControllerName(controller);
@@ -209,7 +215,7 @@ index 37d75d0bc95..7dfa8edb3b5 100644
          desc.vid = pSDL_JoystickGetVendor(joystick);
          desc.pid = pSDL_JoystickGetProduct(joystick);
          desc.version = pSDL_JoystickGetProductVersion(joystick);
-@@ -883,6 +875,22 @@ static void sdl_add_device(unsigned int index)
+@@ -883,6 +872,25 @@ static void sdl_add_device(unsigned int index)
          desc.version = 0;
      }
 
@@ -220,7 +226,10 @@ index 37d75d0bc95..7dfa8edb3b5 100644
 +        return;
 +    }
 +
-+    if (options.map_controllers && pSDL_IsGameController(index))
++    joystick_type = pSDL_JoystickGetType(joystick);
++    if (options->map_controllers && pSDL_IsGameController(index)
++            && joystick_type != SDL_JOYSTICK_TYPE_WHEEL
++            && joystick_type != SDL_JOYSTICK_TYPE_FLIGHT_STICK)
 +        controller = pSDL_GameControllerOpen(index);
 +
 +    if (controller) product = pSDL_GameControllerName(controller);
@@ -237,7 +246,7 @@ index 4d1124f5cc4..3a525b235c6 100644
 --- a/dlls/winebus.sys/bus_udev.c
 +++ b/dlls/winebus.sys/bus_udev.c
 @@ -1286,6 +1286,13 @@ static void udev_add_device(struct udev_device *dev, int fd)
-         memcpy(desc.serialnumber, zeros, sizeof(zeros));
+         impl->button_map[i] = ++impl->button_count;
      }
 
 +    if (is_sdl_blacklisted(desc.vid, desc.pid))
@@ -245,7 +254,7 @@ index 4d1124f5cc4..3a525b235c6 100644
 +        /* this device is blacklisted */
 +        TRACE("hidraw %s: ignoring %s, in SDL blacklist\n", debugstr_a(devnode), debugstr_device_desc(&desc));
 +        close(fd);
-+        return;
++        return STATUS_NOT_SUPPORTED;
 +    }
      if (is_steam_controller(desc.vid, desc.pid))
      {
@@ -255,7 +264,7 @@ index 1269ae05c2b..e88d2181446 100644
 --- a/dlls/winebus.sys/unixlib.h
 +++ b/dlls/winebus.sys/unixlib.h
 @@ -151,6 +151,24 @@
-                             desc->vid, desc->pid, desc->version, desc->input, desc->uid, desc->is_gamepad, desc->is_hidraw);
+                             desc->is_gamepad, desc->is_hidraw, desc->is_bluetooth);
  }
 
 +/* logic from SDL2's SDL_ShouldIgnoreGameController */
@@ -279,7 +288,6 @@ index 1269ae05c2b..e88d2181446 100644
  static inline BOOL is_steam_controller(WORD vid, WORD pid)
  {
      if (vid != 0x28de) return FALSE;
-
 From 7ea1cc2581b35b6d630d0399a0e230b3f57a2014 Mon Sep 17 00:00:00 2001
 From: Andrew Eikum <aeikum@codeweavers.com>
 Date: Fri, 30 Aug 2019 10:20:16 -0500
@@ -306,9 +314,9 @@ index 7dfa8edb3b5..079a615333e 100644
 +        desc.pid = 0x028e;
 +    }
 +
-     if (options.map_controllers && pSDL_IsGameController(index))
-         controller = pSDL_GameControllerOpen(index);
-
+     joystick_type = pSDL_JoystickGetType(joystick);
+     if (options->map_controllers && pSDL_IsGameController(index)
+             && joystick_type != SDL_JOYSTICK_TYPE_WHEEL
 From e62a27bb284c4a7364d69fb09ae4df18c8860185 Mon Sep 17 00:00:00 2001
 From: Andrew Eikum <aeikum@codeweavers.com>
 Date: Thu, 30 Sep 2021 20:38:04 +0200
@@ -351,11 +359,11 @@ index 8cff984ac20..ae742b0cba4 100644
  #include "wine/debug.h"
  #include "wine/list.h"
 +#include "wine/js_blacklist.h" /* for wine_js_blacklist */
-
- #include "wine/debug.h"
- #include "wine/list.h"
+ 
+ struct device_desc
+ {
 @@ -151,6 +151,19 @@
-                             desc->vid, desc->pid, desc->version, desc->input, desc->uid, desc->is_gamepad, desc->is_hidraw);
+                             desc->is_gamepad, desc->is_hidraw, desc->is_bluetooth);
  }
 
 +static inline BOOL is_wine_blacklisted(DWORD vid, DWORD pid)
@@ -372,7 +380,7 @@ index 8cff984ac20..ae742b0cba4 100644
 +}
 +
  /* logic from SDL2's SDL_ShouldIgnoreGameController */
- BOOL is_sdl_blacklisted(DWORD vid, DWORD pid)
+ static inline BOOL is_sdl_blacklisted(DWORD vid, DWORD pid)
  {
 diff --git a/include/wine/js_blacklist.h b/include/wine/js_blacklist.h
 new file mode 100644
@@ -408,12 +416,12 @@ index 3a525b235c6..5d8d2384e69 100644
 +    if (access("/run/pressure-vessel", R_OK) || access("/.flatpak-info", R_OK))
 +    {
 +        TRACE("Container detected, bypassing udevd by default\n");
-+        options.disable_udevd = TRUE;
++        disable_udevd = TRUE;
 +    }
 +
  #ifdef HAVE_SYS_INOTIFY_H
-     if (options.disable_udevd) monitor_fd = create_inotify();
-     if (monitor_fd < 0) options.disable_udevd = FALSE;
+     if (disable_udevd) monitor_fd = create_inotify();
+     if (monitor_fd < 0) disable_udevd = FALSE;
 From dd54394cee8090d2ef55c0da2ecde7a724c6a8c6 Mon Sep 17 00:00:00 2001
 From: Simon McVittie <smcv@collabora.com>
 Date: Tue, 10 Nov 2020 19:03:47 +0000
@@ -440,13 +448,13 @@ index 5d8d2384e69..4592b095ff5 100644
 --- a/dlls/winebus.sys/bus_udev.c
 +++ b/dlls/winebus.sys/bus_udev.c
 @@ -25,6 +25,7 @@
-
+ #include "config.h"
  #include <errno.h>
  #include <fcntl.h>
 +#include <limits.h>
  #include <stdarg.h>
  #include <stdlib.h>
- #include <unistd.h>
+ #include <stdio.h>
 @@ -500,7 +501,303 @@ static struct base_device *find_device_from_syspath(const char *path)
 
  #define test_bit(arr,bit) (((BYTE*)(arr))[(bit)>>3]&(1<<((bit)&7)))
@@ -814,8 +822,8 @@ index 84c8721270c..42bee61f0f0 100644
  MAKE_FUNCPTR(SDL_GetTicks);
 +MAKE_FUNCPTR(SDL_LogSetPriority);
  static int (*pSDL_JoystickRumble)(SDL_Joystick *joystick, Uint16 low_frequency_rumble, Uint16 high_frequency_rumble, Uint32 duration_ms);
+ static int (*pSDL_JoystickRumbleTriggers)(SDL_Joystick *joystick, Uint16 left_rumble, Uint16 right_rumble, Uint32 duration_ms);
  static Uint16 (*pSDL_JoystickGetProduct)(SDL_Joystick * joystick);
- static Uint16 (*pSDL_JoystickGetProductVersion)(SDL_Joystick * joystick);
 @@ -1029,6 +1030,7 @@ NTSTATUS sdl_bus_init(void *args)
      LOAD_FUNCPTR(SDL_RegisterEvents);
      LOAD_FUNCPTR(SDL_PushEvent);
@@ -823,7 +831,7 @@ index 84c8721270c..42bee61f0f0 100644
 +    LOAD_FUNCPTR(SDL_LogSetPriority);
  #undef LOAD_FUNCPTR
      pSDL_JoystickRumble = dlsym(sdl_handle, "SDL_JoystickRumble");
-     pSDL_JoystickGetProduct = dlsym(sdl_handle, "SDL_JoystickGetProduct");
+     pSDL_JoystickRumbleTriggers = dlsym(sdl_handle, "SDL_JoystickRumbleTriggers");
 @@ -1047,6 +1049,11 @@ NTSTATUS sdl_bus_init(void *args)
          goto failed;
      }
@@ -846,5 +854,5 @@ index 4ea66b37f335..1a4f0cd9e6cd 100644
  	wine/itss.idl \
 +	wine/js_blacklist.h \
  	wine/list.h \
+ 	wine/mfinternal.idl \
  	wine/mmsystem16.h \
- 	wine/mscvpdb.h \ 
