@@ -20,8 +20,8 @@ index 2a583871f1a..1af7b5070f6 100644
 
      CRITICAL_SECTION cs;
      enum device_state state;
-@@ -284,7 +285,7 @@ static void remove_pending_irps(DEVICE_OBJECT *device)
-     }
+@@ -284,7 +285,7 @@ static void make_unique_container_id(struct device_extension *device)
+     memcpy(device->container_id.Data4, &ticks.QuadPart, sizeof(device->container_id.Data4));
  }
 
 -static DEVICE_OBJECT *bus_create_hid_device(struct device_desc *desc, UINT64 unix_device)
@@ -158,7 +158,7 @@ index 1269ae05c2b..e88d2181446 100644
 --- a/dlls/winebus.sys/unixlib.h
 +++ b/dlls/winebus.sys/unixlib.h
 @@ -151,6 +151,19 @@
-                             desc->is_gamepad, desc->is_hidraw, desc->is_bluetooth);
+                             desc->is_gamepad, desc->is_hidraw, desc->bus_type);
  }
 
 +static inline BOOL is_steam_controller(WORD vid, WORD pid)
@@ -239,8 +239,8 @@ index 37d75d0bc95..7dfa8edb3b5 100644
 +    id = pSDL_JoystickInstanceID(joystick);
 +
      if (pSDL_JoystickGetSerial && (sdl_serial = pSDL_JoystickGetSerial(joystick)))
-     {
          ntdll_umbstowcs(sdl_serial, strlen(sdl_serial) + 1, desc.serialnumber, ARRAY_SIZE(desc.serialnumber));
+ 
 diff --git a/dlls/winebus.sys/bus_udev.c b/dlls/winebus.sys/bus_udev.c
 index 4d1124f5cc4..3a525b235c6 100644
 --- a/dlls/winebus.sys/bus_udev.c
@@ -264,7 +264,7 @@ index 1269ae05c2b..e88d2181446 100644
 --- a/dlls/winebus.sys/unixlib.h
 +++ b/dlls/winebus.sys/unixlib.h
 @@ -151,6 +151,24 @@
-                             desc->is_gamepad, desc->is_hidraw, desc->is_bluetooth);
+                             desc->is_gamepad, desc->is_hidraw, desc->bus_type);
  }
 
 +/* logic from SDL2's SDL_ShouldIgnoreGameController */
@@ -363,7 +363,7 @@ index 8cff984ac20..ae742b0cba4 100644
  struct device_desc
  {
 @@ -151,6 +151,19 @@
-                             desc->is_gamepad, desc->is_hidraw, desc->is_bluetooth);
+                             desc->is_gamepad, desc->is_hidraw, desc->bus_type);
  }
 
 +static inline BOOL is_wine_blacklisted(DWORD vid, DWORD pid)
