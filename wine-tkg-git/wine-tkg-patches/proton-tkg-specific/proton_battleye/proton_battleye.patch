@@ -80,7 +80,7 @@ index 08dad9cb646..b2a49a16177 100644
 +#include "winver.h"
  #include "wincontypes.h"
  #include "winternl.h"
- #include "winuser.h"
+ 
 @@ -486,6 +487,197 @@ BOOL WINAPI DECLSPEC_HOTPATCH CreateProcessInternalA( HANDLE token, const char *
      return ret;
  }
@@ -911,7 +911,7 @@ index 98af91c47a7..375a0f416a5 100644
 -    WCHAR *p, *tidy_cmdline = cmd_line;
 +    WCHAR *p, *tidy_cmdline = cmd_line, *orig_app_name = NULL;
      RTL_USER_PROCESS_PARAMETERS *params = NULL;
-     RTL_USER_PROCESS_INFORMATION rtl_info;
+     RTL_USER_PROCESS_INFORMATION rtl_info = { 0 };
      HANDLE parent = 0, debug = 0;
 @@ -680,7 +689,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH CreateProcessInternalW( HANDLE token, const WCHAR
          app_name = name;
