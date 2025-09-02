@@ -726,7 +726,7 @@ index 732e997787b..7ce0638c7df 100644
  AddService=nsiproxy,0x800,NsiProxyService
 +AddService=SharedGpuResources,0x800,SharedGpuResourcesService
  
- [DefaultInstall.NT.Services]
+ [DefaultInstall.ntx86.Services]
  AddService=BITS,0,BITSService
 @@ -229,6 +230,7 @@ AddService=Winmgmt,0,WinmgmtService
  AddService=wuauserv,0,wuauService
