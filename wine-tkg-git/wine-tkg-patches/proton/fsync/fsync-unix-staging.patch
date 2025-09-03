@@ -14,8 +14,8 @@ index c96a62ae006..a9be561d87a 100644
  	unix/file.c \
 +	unix/fsync.c \
  	unix/loader.c \
+ 	unix/loadorder.c \
  	unix/process.c \
- 	unix/registry.c \
 diff --git a/dlls/ntdll/unix/esync.c b/dlls/ntdll/unix/esync.c
 index ed801c71991..ac0326b1aba 100644
 --- a/dlls/ntdll/unix/esync.c
@@ -1392,10 +1392,10 @@ index 19b73256ef2..d0d979248f8 100644
  #include "esync.h"
 +#include "fsync.h"
  #include "wine/list.h"
+ #include "ntsyscalls.h"
  #include "wine/debug.h"
- 
 @@ -1565,6 +1566,7 @@ static void start_main_thread(void)
-     signal_init_thread( teb );
+     signal_alloc_thread( teb );
      dbg_init();
      startup_info_size = server_init_process();
 +    fsync_init();
@@ -1415,8 +1415,8 @@ index 34d4c80eee5..c48a6339fee 100644
  
  WINE_DEFAULT_DEBUG_CHANNEL(server);
 @@ -1698,6 +1699,9 @@ NTSTATUS WINAPI NtClose( HANDLE handle )
-     NTSTATUS ret;
-     int fd = remove_fd_from_cache( handle );
+      * retrieve it again */
+     fd = remove_fd_from_cache( handle );
  
 +    if (do_fsync())
 +        fsync_close( handle );
@@ -1457,8 +1457,8 @@ index 051c672bd12..d8a8eb526a1 100644
          return esync_open_semaphore( handle, access, attr );
  
 @@ -327,6 +327,9 @@ NTSTATUS WINAPI NtQuerySemaphore( HANDLE handle, SEMAPHORE_INFORMATION_CLASS cla
- 
-     if (len != sizeof(SEMAPHORE_BASIC_INFORMATION)) return STATUS_INFO_LENGTH_MISMATCH;
+         return ret;
+     }
  
 +    if (do_fsync())
 +        return fsync_query_semaphore( handle, info, ret_len );
@@ -1467,8 +1467,8 @@ index 051c672bd12..d8a8eb526a1 100644
          return esync_query_semaphore( handle, info, ret_len );
  
 @@ -367,6 +367,9 @@ NTSTATUS WINAPI NtReleaseSemaphore( HANDLE handle, ULONG count, ULONG *previous
- {
-     unsigned int ret;
+     if ((ret = inproc_release_semaphore( handle, count, previous )) != STATUS_NOT_IMPLEMENTED)
+         return ret;
  
 +    if (do_fsync())
 +        return fsync_release_semaphore( handle, count, previous );
@@ -1497,8 +1497,8 @@ index 051c672bd12..d8a8eb526a1 100644
          return esync_open_event( handle, access, attr );
  
 @@ -458,6 +458,9 @@ NTSTATUS WINAPI NtSetEvent( HANDLE handle, LONG *prev_state )
-     /* This comment is a dummy to make sure this patch applies in the right place. */
-     unsigned int ret;
+     if ((ret = inproc_set_event( handle, prev_state )) != STATUS_NOT_IMPLEMENTED)
+         return ret;
  
 +    if (do_fsync())
 +        return fsync_set_event( handle, prev_state );
@@ -1507,8 +1507,8 @@ index 051c672bd12..d8a8eb526a1 100644
          return esync_set_event( handle );
  
 @@ -480,6 +480,9 @@ NTSTATUS WINAPI NtResetEvent( HANDLE handle, LONG *prev_state )
-     /* This comment is a dummy to make sure this patch applies in the right place. */
-     unsigned int ret;
+     if ((ret = inproc_reset_event( handle, prev_state )) != STATUS_NOT_IMPLEMENTED)
+         return ret;
  
 +    if (do_fsync())
 +        return fsync_reset_event( handle, prev_state );
@@ -1517,8 +1517,8 @@ index 051c672bd12..d8a8eb526a1 100644
          return esync_reset_event( handle );
  
 @@ -512,6 +512,9 @@ NTSTATUS WINAPI NtPulseEvent( HANDLE handle, LONG *prev_state )
- {
-     unsigned int ret;
+     if ((ret = inproc_pulse_event( handle, prev_state )) != STATUS_NOT_IMPLEMENTED)
+         return ret;
  
 +    if (do_fsync())
 +        return fsync_pulse_event( handle, prev_state );
@@ -1527,8 +1527,8 @@ index 051c672bd12..d8a8eb526a1 100644
          return esync_pulse_event( handle );
  
 @@ -537,6 +537,9 @@ NTSTATUS WINAPI NtQueryEvent( HANDLE handle, EVENT_INFORMATION_CLASS class,
- 
-     if (len != sizeof(EVENT_BASIC_INFORMATION)) return STATUS_INFO_LENGTH_MISMATCH;
+         return ret;
+     }
  
 +    if (do_fsync())
 +        return fsync_query_event( handle, info, ret_len );
@@ -1547,7 +1547,7 @@ index 051c672bd12..d8a8eb526a1 100644
          return esync_create_mutex( handle, access, attr, owned );
  
 @@ -611,6 +611,9 @@ NTSTATUS WINAPI NtOpenMutant( HANDLE *handle, ACCESS_MASK access, const OBJECT_A
- 
+     *handle = 0;
      if ((ret = validate_open_object_attributes( attr ))) return ret;
  
 +    if (do_fsync())
@@ -1557,8 +1557,8 @@ index 051c672bd12..d8a8eb526a1 100644
          return esync_open_mutex( handle, access, attr );
  
 @@ -641,6 +641,9 @@ NTSTATUS WINAPI NtReleaseMutant( HANDLE handle, LONG *prev_count )
- {
-     unsigned int ret;
+     if ((ret = inproc_release_mutex( handle, prev_count )) != STATUS_NOT_IMPLEMENTED)
+         return ret;
  
 +    if (do_fsync())
 +        return fsync_release_mutex( handle, prev_count );
@@ -1567,8 +1567,8 @@ index 051c672bd12..d8a8eb526a1 100644
          return esync_release_mutex( handle, prev_count );
  
 @@ -665,6 +665,9 @@ NTSTATUS WINAPI NtQueryMutant( HANDLE handle, MUTANT_INFORMATION_CLASS class,
- 
-     if (len != sizeof(MUTANT_BASIC_INFORMATION)) return STATUS_INFO_LENGTH_MISMATCH;
+         return ret;
+     }
  
 +    if (do_fsync())
 +        return fsync_query_mutex( handle, info, ret_len );
@@ -1577,8 +1577,8 @@ index 051c672bd12..d8a8eb526a1 100644
          return esync_query_mutex( handle, info, ret_len );
  
 @@ -1286,6 +1286,13 @@ NTSTATUS WINAPI NtWaitForMultipleObjects( DWORD count, const HANDLE *handles, BO
- 
-     if (!count || count > MAXIMUM_WAIT_OBJECTS) return STATUS_INVALID_PARAMETER_1;
+         return ret;
+     }
  
 +    if (do_fsync())
 +    {
@@ -1591,8 +1591,8 @@ index 051c672bd12..d8a8eb526a1 100644
      {
          NTSTATUS ret = esync_wait_objects( count, handles, wait_any, alertable, timeout );
 @@ -1323,6 +1323,9 @@ NTSTATUS WINAPI NtSignalAndWaitForSingleObject( HANDLE signal, HANDLE wait,
-     select_op_t select_op;
-     UINT flags = SELECT_INTERRUPTIBLE;
+     if ((ret = inproc_signal_and_wait( signal, wait, alertable, timeout )) != STATUS_NOT_IMPLEMENTED)
+         return ret;
  
 +    if (do_fsync())
 +        return fsync_signal_and_wait( signal, wait, alertable, timeout );
@@ -1645,8 +1645,8 @@ index bd89649e769..608c83b579c 100644
 --- a/dlls/ntdll/unix/virtual.c
 +++ b/dlls/ntdll/unix/virtual.c
 @@ -2683,6 +2683,7 @@ static void init_teb( TEB *teb, PEB *peb )
-     teb->StaticUnicodeString.Buffer = teb->StaticUnicodeBuffer;
      teb->StaticUnicodeString.MaximumLength = sizeof(teb->StaticUnicodeBuffer);
+     thread_data = (struct ntdll_thread_data *)&teb->GdiTebBatch;
      thread_data->esync_apc_fd = -1;
 +    thread_data->fsync_apc_futex = NULL;
      thread_data->request_fd = -1;
@@ -1663,7 +1663,7 @@ index 8bd612b4728..6dc5c465e52 100644
 +	fsync.c \
  	handle.c \
  	hook.c \
- 	mach.c \
+ 	inproc_sync.c \
 diff --git a/server/async.c b/server/async.c
 index 1b4f86a1b8b..ceff9c75c27 100644
 --- a/server/async.c
@@ -1774,8 +1774,8 @@ index 78635f3fae1..824b930bba0 100644
  static int console_server_get_esync_fd( struct object *obj, enum esync_type *type );
 +static unsigned int console_server_get_fsync_idx( struct object *obj, enum fsync_type *type );
  static struct fd *console_server_get_fd( struct object *obj );
- static struct object *console_server_lookup_name( struct object *obj, struct unicode_str *name, unsigned int attr );
- static struct object *console_server_open_file( struct object *obj, unsigned int access,
+ static struct object *console_server_lookup_name( struct object *obj, struct unicode_str *name,
+                                                 unsigned int attr, struct object *root );
 @@ -156,6 +160,7 @@ static const struct object_ops console_server_ops =
      remove_queue,                     /* remove_queue */
      console_server_signaled,          /* signaled */
@@ -1800,22 +1800,22 @@ index 78635f3fae1..824b930bba0 100644
      no_satisfied,                     /* satisfied */
      no_signal,                        /* signal */
      no_get_fd,                        /* get_fd */
-@@ -297,6 +301,7 @@ static const struct object_ops input_device_ops =
+@@ -297,6 +301,7 @@ static const struct object_ops console_input_ops =
      remove_queue,                     /* remove_queue */
      console_input_signaled,           /* signaled */
      NULL,                             /* get_esync_fd */
 +    NULL,                             /* get_fsync_idx */
      no_satisfied,                     /* satisfied */
      no_signal,                        /* signal */
-     input_device_get_fd,              /* get_fd */
-@@ -327,6 +332,7 @@ static const struct object_ops output_device_ops =
+     console_input_get_fd,             /* get_fd */
+@@ -327,6 +332,7 @@ static const struct object_ops console_output_ops =
      remove_queue,                     /* remove_queue */
      console_output_signaled,          /* signaled */
      NULL,                             /* get_esync_fd */
 +    NULL,                             /* get_fsync_idx */
      no_satisfied,                     /* satisfied */
      no_signal,                        /* signal */
-     output_device_get_fd,             /* get_fd */
+     console_output_get_fd,            /* get_fd */
 @@ -365,6 +371,7 @@ static const struct object_ops console_connection_ops =
      NULL,                             /* remove_queue */
      NULL,                             /* signaled */
@@ -1853,8 +1853,8 @@ index 78635f3fae1..824b930bba0 100644
  {
      struct console_server *server = (struct console_server*)obj;
 @@ -806,6 +828,9 @@ static struct object *create_console_server( void )
-     }
      allow_fd_caching(server->fd);
+     server->esync_fd = -1;
  
 +    if (do_fsync())
 +        server->fsync_idx = fsync_alloc_shm( 0, 0 );
@@ -2952,8 +2952,8 @@ index 3e02cbb3832..7a09436b637 100644
 --- a/server/main.c
 +++ b/server/main.c
 @@ -37,6 +37,7 @@
- #include "thread.h"
  #include "request.h"
+ #include "unicode.h"
  #include "esync.h"
 +#include "fsync.h"
  
@@ -3124,16 +3124,16 @@ index df50955f621..c4f51dcad30 100644
      no_signal,                     /* signal */
      no_get_fd,                     /* get_fd */
 @@ -547,6 +552,7 @@ struct process *create_process( int fd, struct process *parent, int inherit_all,
-     process->rawinput_mouse  = NULL;
-     process->rawinput_kbd    = NULL;
+     memset( &process->image_info, 0, sizeof(process->image_info) );
+     list_init( &process->rawinput_entry );
      process->esync_fd        = -1;
 +    process->fsync_idx       = 0;
      list_init( &process->kernel_object );
      list_init( &process->thread_list );
      list_init( &process->locks );
 @@ -603,6 +609,9 @@ struct process *create_process( int fd, struct process *parent, int inherit_all,
-     if (!token_assign_label( process->token, security_high_label_sid ))
-         goto error;
+     if (!process->handles || !process->token) goto error;
+     process->session_id = token_get_session_id( process->token );
  
 +    if (do_fsync())
 +        process->fsync_idx = fsync_alloc_shm( 0, 0 );
@@ -3160,13 +3160,13 @@ index eec69ddbcaf..abb4ed31b48 100644
 --- a/server/process.h
 +++ b/server/process.h
 @@ -99,6 +99,7 @@ struct process
-     const struct rawinput_device *rawinput_kbd;   /* rawinput keyboard device, if any */
      struct list          kernel_object;   /* list of kernel object pointers */
+     struct pe_image_info image_info;      /* main exe image info */
      int                  esync_fd;        /* esync file descriptor (signaled on exit) */
 +    unsigned int         fsync_idx;
  };
  
- #define CPU_FLAG(cpu) (1 << (cpu))
+ /* process functions */
 diff --git a/server/protocol.def b/server/protocol.def
 index 2a8662354f6..381bd8d8218 100644
 --- a/server/protocol.def
@@ -3274,7 +3274,7 @@ index a78748b96ca..dccf43197cf 100644
      NULL,                         /* satisfied */
      no_signal,                    /* signal */
      no_get_fd,                    /* get_fd */
-@@ -321,28 +327,33 @@ static struct msg_queue *create_msg_queue( struct thread *thread, struct thread_
+@@ -321,25 +327,30 @@ static struct msg_queue *create_msg_queue( struct thread *thread, struct thread_
          queue->ignore_post_msg = 0;
          queue->esync_fd        = -1;
          queue->esync_in_msgwait = 0;
@@ -3286,11 +3286,8 @@ index a78748b96ca..dccf43197cf 100644
          list_init( &queue->expired_timers );
          for (i = 0; i < NB_MSG_KINDS; i++) list_init( &queue->msg_list[i] );
  
-         if (!(queue->shared = alloc_shared_object()))
-         {
-             release_object( queue );
-             return NULL;
-         }
+         if (get_inproc_device_fd() >= 0 && !(queue->inproc_sync = create_inproc_event_sync( 1, 0 ))) goto error;
+         if (!(queue->shared = alloc_shared_object())) goto error;
  
          SHARED_WRITE_BEGIN( queue->shared, queue_shm_t )
          {
@@ -3309,8 +3306,8 @@ index a78748b96ca..dccf43197cf 100644
              queue->esync_fd = esync_create_fd( 0, 0 );
  
 @@ -509,6 +520,9 @@ static inline void clear_queue_bits( struct msg_queue *queue, unsigned int bits
-         queue->keystate_lock = 0;
      }
+     if (queue->inproc_sync && !is_signaled( queue )) reset_inproc_sync( queue->inproc_sync );
  
 +    if (do_fsync() && !is_signaled( queue ))
 +        fsync_clear( &queue->obj );
@@ -3487,7 +3484,7 @@ index 1a245c58396..1fb3603f2a7 100644
 +#include "fsync.h"
  
  
- #ifdef __i386__
+ /* thread queues */
 @@ -112,6 +113,7 @@ static const struct object_ops thread_apc_ops =
      remove_queue,               /* remove_queue */
      thread_apc_signaled,        /* signaled */
@@ -3529,7 +3526,7 @@ index 1a245c58396..1fb3603f2a7 100644
      thread->queue           = NULL;
      thread->wait            = NULL;
 @@ -364,6 +370,12 @@ struct thread *create_thread( int fd, struct process *process, const struct secu
-         return NULL;
+         }
      }
  
 +    if (do_fsync())
