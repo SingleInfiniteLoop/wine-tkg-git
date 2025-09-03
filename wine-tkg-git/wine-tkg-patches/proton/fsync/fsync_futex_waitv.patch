@@ -791,17 +791,18 @@ diff --git a/dlls/ntdll/unix/loader.c b/dlls/ntdll/unix/loader.c
 index 0360bc64b00..f30d900a07b 100644
 --- a/dlls/ntdll/unix/loader.c
 +++ b/dlls/ntdll/unix/loader.c
-@@ -2028,6 +2028,34 @@ const unixlib_entry_t __wine_unix_call_wow64_funcs[] =
- };
-
- #endif  /* _WIN64 */
+@@ -1968,6 +1968,35 @@ static ULONG_PTR get_image_address(void)
+ #endif
+     return 0;
+ }
++
 +
 +BOOL ac_odyssey;
 +BOOL fsync_simulate_sched_quantum;
 +
 +static void hacks_init(void)
 +{
-+    static const char upc_exe[] = "Ubisoft Game Launcher\\upc.exe";
++    static const char upc_exe[] = "upc.exe";
 +    static const char ac_odyssey_exe[] = "ACOdyssey.exe";
 +    const char *env_str;
 +
@@ -847,14 +848,14 @@ index dbd3e645976..683c2a4f1c2 100644
 +
  extern void init_environment(void);
  extern void init_startup_info(void);
- extern void *create_startup_info( const UNICODE_STRING *nt_image, const RTL_USER_PROCESS_PARAMETERS *params,
+ extern void *create_startup_info( const UNICODE_STRING *nt_image, ULONG process_flags,
 diff --git a/include/config.h.in b/include/config.h.in
 index 8f9b9737b24..4670e4bc881 100644
 --- a/include/config.h.in
 +++ b/include/config.h.in
 @@ -188,6 +188,9 @@
- /* Define to 1 if you have the <linux/filter.h> header file. */
- #undef HAVE_LINUX_FILTER_H
+ /* Define to 1 if you have the <linux/fs.h> header file. */
+ #undef HAVE_LINUX_FS_H
  
 +/* Define to 1 if you have the <linux/futex.h> header file. */
 +#undef HAVE_LINUX_FUTEX_H
