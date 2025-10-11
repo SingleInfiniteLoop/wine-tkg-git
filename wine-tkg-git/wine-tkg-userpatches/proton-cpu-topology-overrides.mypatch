@@ -76,9 +76,9 @@ index b1d3e863240..7b0c7c32f58 100644
      {
 +        if (cpu_override)
 +            wine_server_add_data( req, cpu_override, sizeof(*cpu_override) );
-         req->teb      = wine_server_client_ptr( teb );
-         req->peb      = NtCurrentTeb64() ? NtCurrentTeb64()->Peb : wine_server_client_ptr( peb );
- #ifdef __i386__
+         req->teb = wine_server_client_ptr( teb );
+         req->peb = NtCurrentTeb64() ? NtCurrentTeb64()->Peb : wine_server_client_ptr( peb );
+         status = wine_server_call( req );
 diff --git a/dlls/ntdll/unix/system.c b/dlls/ntdll/unix/system.c
 index bf3d6c34f14..fc8165f2828 100644
 --- a/dlls/ntdll/unix/system.c
@@ -414,10 +414,10 @@ index f4f45d958be..aed7090572b 100644
  struct monitor_info
  {
      struct rectangle raw;
-@@ -970,6 +976,7 @@ struct init_process_done_request
+@@ -969,6 +975,7 @@ struct init_process_done_request
+     char __pad_12[4];
      client_ptr_t teb;
      client_ptr_t peb;
-     client_ptr_t ldt_copy;
 +    /* VARARG(cpu_override,cpu_topology_override); */
  };
  struct init_process_done_reply
@@ -497,7 +497,7 @@ index 48f9f4fae90..0f2fe077b80 100644
 +    VARARG(cpu_override,cpu_topology_override); /* Overridden CPUs to host CPUs mapping. */
      client_ptr_t teb;          /* TEB of new thread (in process address space) */
      client_ptr_t peb;          /* PEB of new process (in process address space) */
-     client_ptr_t ldt_copy;     /* address of LDT copy (in process address space) */
+ @REPLY
 diff --git a/server/thread.c b/server/thread.c
 index 0fb3aa0e727..31043c3df33 100644
 --- a/server/thread.c
