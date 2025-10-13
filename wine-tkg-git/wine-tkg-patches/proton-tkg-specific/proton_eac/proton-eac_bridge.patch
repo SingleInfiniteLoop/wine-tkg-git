@@ -81,9 +81,9 @@ index aa987a80186..be25b2213d9 100644
      enum loadorder ret = LO_INVALID;
      const WCHAR *path = nt_name->Buffer;
 @@ -391,6 +395,43 @@ enum loadorder get_load_order( const UNICODE_STRING *nt_name )
-
-     TRACE("looking for %s\n", debugstr_w(path));
-
+         len -= 4;
+     }
+ 
 +    /* HACK: special logic for easyanticheat bridge: only load the bridge (builtin) if there exists a native version of the library next to the windows version */
 +    basename = get_basename((WCHAR *)path);
 +    if (!wcsicmp(basename, easyanticheat_x86W) || !wcsicmp(basename, easyanticheat_x64W) || !wcsicmp(basename, easyanticheatW))
@@ -123,7 +123,7 @@ index aa987a80186..be25b2213d9 100644
 +
      /* Strip path information if the module resides in the system directory
       */
-     if (!wcsnicmp( system_dir + 4, path, wcslen(system_dir) - 4 ))
+     if (len > wcslen(system_dir) - 4 && !wcsnicmp( system_dir + 4, path, wcslen(system_dir) - 4 ))
 
 From 9dce79072ef483dda3674345eaf2274fd06dac89 Mon Sep 17 00:00:00 2001
 From: Derek Lesho <dlesho@codeweavers.com>
