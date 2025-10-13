@@ -828,7 +828,7 @@ index 0360bc64b00..f30d900a07b 100644
  /***********************************************************************
   *           start_main_thread
 @@ -2041,6 +2041,7 @@ static void start_main_thread(void)
-     signal_alloc_thread( teb );
+     signal_init_threading();
      dbg_init();
      startup_info_size = server_init_process();
 +    hacks_init();
@@ -840,8 +840,8 @@ index dbd3e645976..683c2a4f1c2 100644
 --- a/dlls/ntdll/unix/unix_private.h
 +++ b/dlls/ntdll/unix/unix_private.h
 @@ -146,6 +146,9 @@ #ifdef __i386__
- extern struct ldt_copy __wine_ldt_copy;
- #endif
+ extern pthread_mutex_t fd_cache_mutex;
+ extern struct _KUSER_SHARED_DATA *user_shared_data;
  
 +extern BOOL ac_odyssey;
 +extern BOOL fsync_simulate_sched_quantum;
