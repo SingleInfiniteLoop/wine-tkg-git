@@ -3857,7 +3857,7 @@ index c09db82ddaf..b8cd562b6f4 100644
 +    NULL,                           /* get_fsync_idx */
      NULL,                           /* satisfied */
      no_signal,                      /* signal */
-     no_get_fd,                      /* get_fd */
+     d3dkmt_object_get_fd,           /* get_fd */
 @@ -109,6 +108,7 @@ static const struct object_ops dxgk_shared_sync_ops =
      NULL,                               /* remove_queue */
      NULL,                               /* signaled */
