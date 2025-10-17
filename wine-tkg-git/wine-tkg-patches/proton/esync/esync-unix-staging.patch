@@ -888,7 +888,7 @@ index aa120ae38ec..fdda50575d1 100644
  #include "ntsyscalls.h"
  #include "wine/debug.h"
 @@ -1790,6 +1791,7 @@ static void start_main_thread(void)
-     signal_alloc_thread( teb );
+     signal_init_threading();
      dbg_init();
      startup_info_size = server_init_process();
 +    esync_init();
@@ -2997,6 +2997,16 @@ index c727bfdd1ba..f1a88e3d23f 100644
 +        event->esync_fd = esync_create_fd( signaled, 0 );
  
      return &event->obj;
+ }
+@@ -115,6 +119,9 @@ struct event_sync *create_server_internal_sync( int manual, int signaled )
+     if (!(event = alloc_object( &event_sync_ops ))) return NULL;
+     event->manual   = manual;
+     event->signaled = signaled;
++
++    if (do_esync())
++        event->esync_fd = esync_create_fd( signaled, 0 );
+ 
+     return event;
  }
 @@ -134,6 +141,14 @@ static int event_sync_signaled( struct object *obj, struct wait_queue_entry *entry )
      return event->signaled;
@@ -7412,7 +7422,7 @@ index c09db82ddaf..b8cd562b6f4 100644
 +    NULL,                           /* get_esync_fd */
      NULL,                           /* satisfied */
      no_signal,                      /* signal */
-     no_get_fd,                      /* get_fd */
+     d3dkmt_object_get_fd,           /* get_fd */
 @@ -109,6 +108,7 @@ static const struct object_ops dxgk_shared_sync_ops =
      no_add_queue,                       /* add_queue */
      NULL,                               /* remove_queue */

@@ -2092,7 +2092,7 @@ index 8607b494b6d..28a52e61d00 100644
      event_sync_satisfied,      /* satisfied */
      event_sync_signal,         /* signal */
      no_get_fd,                 /* get_fd */
-@@ -104,6 +108,9 @@ static struct object *create_event_sync( int manual, int signaled )
+@@ -104,7 +108,10 @@ static struct object *create_event_sync( int manual, int signaled )
      event->manual   = manual;
      event->signaled = signaled;
  
@@ -2102,6 +2102,18 @@ index 8607b494b6d..28a52e61d00 100644
      if (do_esync())
          event->esync_fd = esync_create_fd( signaled, 0 );
  
+     return &event->obj;
+@@ -121,7 +125,10 @@ struct event_sync *create_server_internal_sync( int manual, int signaled )
+     event->manual   = manual;
+     event->signaled = signaled;
+ 
++    if (do_fsync())
++        event->fsync_idx = fsync_alloc_shm( signaled, 0 );
++
+     if (do_esync())
+         event->esync_fd = esync_create_fd( signaled, 0 );
+ 
+     return event;
 @@ -150,6 +157,14 @@ static int event_sync_get_esync_fd( struct object *obj, enum esync_type *type )
      return event->esync_fd;
  }
@@ -3857,7 +3869,7 @@ index c09db82ddaf..b8cd562b6f4 100644
 +    NULL,                           /* get_fsync_idx */
      NULL,                           /* satisfied */
      no_signal,                      /* signal */
-     no_get_fd,                      /* get_fd */
+     d3dkmt_object_get_fd,           /* get_fd */
 @@ -109,6 +108,7 @@ static const struct object_ops dxgk_shared_sync_ops =
      NULL,                               /* remove_queue */
      NULL,                               /* signaled */
