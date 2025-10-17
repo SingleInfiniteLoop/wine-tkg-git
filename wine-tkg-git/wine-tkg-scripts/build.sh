@@ -19,7 +19,25 @@ _prebuild_common() {
 	fi
 
 	if [ "$_pkg_strip" != "true" ]; then
-		sed 's|${STRIPPROG-strip}||g' "$srcdir/$_winesrcdir"/tools/install-sh -i
+        OLDPWD=$PWD
+        cd "$srcdir/$_winesrcdir"
+        cat <<__EOF | patch -p1 -N || true
+--- a/tools/install.c
++++ b/tools/install.c
+@@ -132,11 +132,6 @@ static void set_file_permissions( struct strarray files )
+         const char *chgrp = getenv( "CHGRPPROG" );
+         spawn_program( chgrp ? chgrp : "chgrp", group, files );
+     }
+-    if (strip)
+-    {
+-        if (!strip_program) strip_program = getenv( "STRIPPROG" );
+-        spawn_program( strip_program ? strip_program : "strip", NULL, files );
+-    }
+     if (mode)
+     {
+         const char *chmod = getenv( "CHMODPROG" );
+__EOF
+        cd $OLDPWD
 		echo "Stripping disabled" >>"$_where"/last_build_config.log
 	fi
 
