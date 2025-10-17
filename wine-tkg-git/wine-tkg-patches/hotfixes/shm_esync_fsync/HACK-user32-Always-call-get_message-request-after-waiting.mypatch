@@ -30,7 +30,7 @@ index 11111111111..11111111111 100644
 -        if (check_queue_bits( wake_mask, filter->mask, wake_mask | signal_bits, filter->mask | clear_bits,
 +        if (!waited && /* avoid hung queue */
 +            check_queue_bits( wake_mask, filter->mask, wake_mask | signal_bits, filter->mask | clear_bits,
-                               &wake_bits, &changed_bits ))
+                               &wake_bits, &changed_bits, filter->internal ))
              res = STATUS_PENDING;
          else SERVER_START_REQ( get_message )
 @@ -2935,7 +2935,7 @@ int peek_message( MSG *msg, const struct peek_message_filter *filter )
@@ -51,15 +51,15 @@ index 11111111111..11111111111 100644
  }
  
  /***********************************************************************
-@@ -3213,7 +3213,7 @@ void check_for_events( UINT flags )
-     MSG msg;
+@@ -3213,7 +3213,7 @@ BOOL process_driver_events( UINT mask )
+     {
+         struct peek_message_filter filter = {.internal = TRUE};
+         MSG msg;
+-        peek_message( &msg, &filter );
++        peek_message( &msg, &filter, FALSE );
+     }
  
-     if (!process_driver_events( flags )) flush_window_surfaces( TRUE );
--    peek_message( &msg, &filter );
-+    peek_message( &msg, &filter, FALSE );
- }
- 
- /* monotonic timer tick for throttling driver event checks */
+     /* check for hardware messages requiring client dispatch */
 @@ -3234,7 +3234,7 @@ BOOL WINAPI NtUserPeekMessage( MSG *msg_out, HWND hwnd, UINT first, UINT last, U
      user_check_not_lock();
      check_for_driver_events();
