@@ -6,12 +6,12 @@ index da1c4c87a60..70f278531c8 100644
              }
          }
  
-+        if ((msg->entry.next == &input->msg_list) ||
-+            (&msg->entry == &input->msg_list))
++        if ((msg->entry.next == &queue->input->msg_list) ||
++            (&msg->entry == &queue->input->msg_list))
 +        {
-+            clear_queue_bits( current->queue, QS_RAWINPUT );
++            clear_queue_bits( queue, QS_RAWINPUT );
 +        }
 +
          if (!next_size)
          {
-             if (count) next_size = sizeof(RAWINPUT);
+             clear_queue_bits( queue, QS_RAWINPUT | (list_empty( &queue->input->msg_list ) ? QS_HARDWARE : 0) );
