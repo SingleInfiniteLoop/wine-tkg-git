@@ -37,7 +37,7 @@ index ed801c71991..ac0326b1aba 100644
  
      return do_esync_cached;
  #else
-@@ -867,7 +868,7 @@ static NTSTATUS __esync_wait_objects( DWORD count, const HANDLE *handles, BOOLEA
+@@ -867,7 +868,7 @@ static NTSTATUS __esync_wait_objects( DWORD count, const HANDLE *handles, WAIT_TYPE
              return ret;
      }
  
@@ -46,12 +46,12 @@ index ed801c71991..ac0326b1aba 100644
          msgwait = TRUE;
  
      if (has_esync && has_server)
-@@ -896,7 +897,7 @@ static NTSTATUS __esync_wait_objects( DWORD count, const HANDLE *handles, BOOLEA
+@@ -896,7 +897,7 @@ static NTSTATUS __esync_wait_objects( DWORD count, const HANDLE *handles, WAIT_TYPE
          }
      }
  
--    if (wait_any || count == 1)
-+    if (wait_any || count <= 1)
+-    if (type != WaitAll || count == 1)
++    if (type != WaitAll || count <= 1)
      {
          /* Try to check objects now, so we can obviate poll() at least. */
          for (i = 0; i < count; i++)
@@ -774,7 +774,7 @@ index 00000000000..5012425b95a
 +}
 +
 +static NTSTATUS __fsync_wait_objects( DWORD count, const HANDLE *handles,
-+    BOOLEAN wait_any, BOOLEAN alertable, const LARGE_INTEGER *timeout )
++    WAIT_TYPE type, BOOLEAN alertable, const LARGE_INTEGER *timeout )
 +{
 +    static const LARGE_INTEGER zero = {0};
 +
@@ -840,7 +840,7 @@ index 00000000000..5012425b95a
 +
 +    if (TRACE_ON(fsync))
 +    {
-+        TRACE("Waiting for %s of %d handles:", wait_any ? "any" : "all", count);
++        TRACE("Waiting for %s of %d handles:", type == WaitAll ? "all" : "any", count);
 +        for (i = 0; i < count; i++)
 +            TRACE(" %p", handles[i]);
 +
@@ -859,7 +859,7 @@ index 00000000000..5012425b95a
 +        }
 +    }
 +
-+    if (wait_any || count <= 1)
++    if (type != WaitAll || count <= 1)
 +    {
 +        while (1)
 +        {
@@ -1279,7 +1279,7 @@ index 00000000000..5012425b95a
 + * purpose is to make sure the server knows when we are doing a message wait.
 + * This is separated into a wrapper function since there are at least a dozen
 + * exit paths from fsync_wait_objects(). */
-+NTSTATUS fsync_wait_objects( DWORD count, const HANDLE *handles, BOOLEAN wait_any,
++NTSTATUS fsync_wait_objects( DWORD count, const HANDLE *handles, WAIT_TYPE type,
 +                             BOOLEAN alertable, const LARGE_INTEGER *timeout )
 +{
 +    BOOL msgwait = FALSE;
@@ -1292,7 +1292,7 @@ index 00000000000..5012425b95a
 +        server_set_msgwait( 1 );
 +    }
 +
-+    ret = __fsync_wait_objects( count, handles, wait_any, alertable, timeout );
++    ret = __fsync_wait_objects( count, handles, type, alertable, timeout );
 +
 +    if (msgwait)
 +        server_set_msgwait( 0 );
@@ -1325,7 +1325,7 @@ index 00000000000..5012425b95a
 +    }
 +    if (ret) return ret;
 +
-+    return fsync_wait_objects( 1, &wait, TRUE, alertable, timeout );
++    return fsync_wait_objects( 1, &wait, WaitAny, alertable, timeout );
 +}
 diff --git a/dlls/ntdll/unix/fsync.h b/dlls/ntdll/unix/fsync.h
 new file mode 100644
@@ -1378,7 +1378,7 @@ index 00000000000..b3604548554
 +extern NTSTATUS fsync_release_mutex( HANDLE handle, LONG *prev );
 +extern NTSTATUS fsync_query_mutex( HANDLE handle, void *info, ULONG *ret_len );
 +
-+extern NTSTATUS fsync_wait_objects( DWORD count, const HANDLE *handles, BOOLEAN wait_any,
++extern NTSTATUS fsync_wait_objects( DWORD count, const HANDLE *handles, WAIT_TYPE type,
 +                                    BOOLEAN alertable, const LARGE_INTEGER *timeout );
 +extern NTSTATUS fsync_signal_and_wait( HANDLE signal, HANDLE wait,
 +    BOOLEAN alertable, const LARGE_INTEGER *timeout );
@@ -1582,14 +1582,14 @@ index 051c672bd12..d8a8eb526a1 100644
  
 +    if (do_fsync())
 +    {
-+        NTSTATUS ret = fsync_wait_objects( count, handles, wait_any, alertable, timeout );
++        NTSTATUS ret = fsync_wait_objects( count, handles, type, alertable, timeout );
 +        if (ret != STATUS_NOT_IMPLEMENTED)
 +            return ret;
 +    }
 +
      if (do_esync())
      {
-         NTSTATUS ret = esync_wait_objects( count, handles, wait_any, alertable, timeout );
+         NTSTATUS ret = esync_wait_objects( count, handles, type, alertable, timeout );
 @@ -1323,6 +1323,9 @@ NTSTATUS WINAPI NtSignalAndWaitForSingleObject( HANDLE signal, HANDLE wait,
      if ((ret = inproc_signal_and_wait( signal, wait, alertable, timeout )) != STATUS_NOT_IMPLEMENTED)
          return ret;
@@ -1606,14 +1606,14 @@ index 051c672bd12..d8a8eb526a1 100644
      {
 +        if (do_fsync())
 +        {
-+            status = fsync_wait_objects( 0, NULL, TRUE, TRUE, timeout );
++            status = fsync_wait_objects( 0, NULL, WaitAny, TRUE, timeout );
 +            if (status != STATUS_NOT_IMPLEMENTED)
 +                goto alert_waited;
 +        }
 +
 +        if (do_esync())
 +        {
-+            status = esync_wait_objects( 0, NULL, TRUE, TRUE, timeout );
++            status = esync_wait_objects( 0, NULL, WaitAny, TRUE, timeout );
 +            if (status != STATUS_NOT_IMPLEMENTED)
 +                goto alert_waited;
 +        }
@@ -3647,7 +3647,7 @@ index 0f6108b684a..53627631343 100644
 --- a/server/thread.h
 +++ b/server/thread.h
 @@ -56,6 +56,8 @@ struct thread
-     struct list            mutex_list;    /* list of currently owned mutexes */
+     struct list            d3dkmt_mutexes;/* list of currently owned d3dkmt mutexes */
      int                    esync_fd;      /* esync file descriptor (signalled on exit) */
      int                    esync_apc_fd;  /* esync apc fd (signalled when APCs are present) */
 +    unsigned int           fsync_idx;
@@ -3862,7 +3862,7 @@ diff --git a/server/d3dkmt.c b/server/d3dkmt.c
 index c09db82ddaf..b8cd562b6f4 100644
 --- a/server/d3dkmt.c
 +++ b/server/d3dkmt.c
-@@ -55,6 +55,7 @@ static const struct object_ops d3dkmt_object_ops =
+@@ -58,6 +58,7 @@ static const struct object_ops d3dkmt_object_ops =
      NULL,                           /* remove_queue */
      NULL,                           /* signaled */
      NULL,                           /* get_esync_fd */
@@ -3870,7 +3870,15 @@ index c09db82ddaf..b8cd562b6f4 100644
      NULL,                           /* satisfied */
      no_signal,                      /* signal */
      d3dkmt_object_get_fd,           /* get_fd */
-@@ -109,6 +108,7 @@ static const struct object_ops dxgk_shared_sync_ops =
+@@ -127,6 +128,7 @@ static const struct object_ops d3dkmt_mutex_ops =
+     NULL,                           /* remove_queue */
+     NULL,                           /* signaled */
+     NULL,                           /* get_esync_fd */
++    NULL,                           /* get_fsync_idx */
+     NULL,                           /* satisfied */
+     no_signal,                      /* signal */
+     no_get_fd,                      /* get_fd */
+@@ -180,6 +182,7 @@ static const struct object_ops dxgk_shared_sync_ops =
      NULL,                               /* remove_queue */
      NULL,                               /* signaled */
      NULL,                               /* get_esync_fd */
@@ -3878,7 +3886,7 @@ index c09db82ddaf..b8cd562b6f4 100644
      NULL,                               /* satisfied */
      no_signal,                          /* signal */
      no_get_fd,                          /* get_fd */
-@@ -176,6 +176,7 @@ static const struct object_ops dxgk_shared_resource_ops =
+@@ -248,6 +251,7 @@ static const struct object_ops dxgk_shared_resource_ops =
      NULL,                                   /* remove_queue */
      NULL,                                   /* signaled */
      NULL,                                   /* get_esync_fd */
