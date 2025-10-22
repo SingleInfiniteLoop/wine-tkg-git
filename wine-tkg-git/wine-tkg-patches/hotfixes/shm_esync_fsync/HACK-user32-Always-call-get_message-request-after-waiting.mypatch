@@ -59,7 +59,7 @@ index 11111111111..11111111111 100644
 +        peek_message( &msg, &filter, FALSE );
      }
  
-     /* check for hardware messages requiring client dispatch */
+     return is_queue_signaled();
 @@ -3234,7 +3234,7 @@ BOOL WINAPI NtUserPeekMessage( MSG *msg_out, HWND hwnd, UINT first, UINT last, U
      user_check_not_lock();
      check_for_driver_events();
