@@ -1,0 +1,369 @@
+diff --git a/dlls/winevulkan/make_vulkan b/dlls/winevulkan/make_vulkan
+index 3c528037826..1451242833f 100755
+--- a/dlls/winevulkan/make_vulkan
++++ b/dlls/winevulkan/make_vulkan
+@@ -244,6 +244,8 @@ USER_DRIVER_FUNCS = {
+     "vkQueueSubmit2KHR",
+     "vkUnmapMemory",
+     "vkUnmapMemory2KHR",
++    "wine_vkAcquireKeyedMutex",
++    "wine_vkReleaseKeyedMutex",
+ }
+ 
+ # functions for which the unix thunk is manually implemented
+diff --git a/dlls/winevulkan/winevk.xml b/dlls/winevulkan/winevk.xml
+index a9fdcd548c4..a9fd68548c4 100644
+--- a/dlls/winevulkan/winevk.xml
++++ b/dlls/winevulkan/winevk.xml
+@@ -8,4 +8,25 @@
+             <member><type>BOOL</type> <name>bInheritHandle</name></member>
+         </type>
+     </types>
++    <commands>
++        <command successcodes="VK_SUCCESS,VK_TIMEOUT" errorcodes="VK_ERROR_UNKNOWN">
++            <proto><type>VkResult</type> <name>wine_vkAcquireKeyedMutex</name></proto>
++            <param><type>VkDevice</type> <name>device</name></param>
++            <param><type>VkDeviceMemory</type> <name>memory</name></param>
++            <param><type>uint64_t</type> <name>key</name></param>
++            <param><type>uint32_t</type> <name>timeout_ms</name></param>
++        </command>
++        <command successcodes="VK_SUCCESS" errorcodes="VK_ERROR_UNKNOWN">
++            <proto><type>VkResult</type> <name>wine_vkReleaseKeyedMutex</name></proto>
++            <param><type>VkDevice</type> <name>device</name></param>
++            <param><type>VkDeviceMemory</type> <name>memory</name></param>
++            <param><type>uint64_t</type> <name>key</name></param>
++        </command>
++    </commands>
++    <feature api="vulkan,vulkansc" name="WINE_CUSTOM" comment="Wine custom functions.">
++        <require>
++            <command name="wine_vkAcquireKeyedMutex"/>
++            <command name="wine_vkReleaseKeyedMutex"/>
++        </require>
++    </feature>
+ </registry>
+diff --git a/dlls/winevulkan/loader_thunks.c b/dlls/winevulkan/loader_thunks.c
+index 2b396998be8..bbd30cba205 100644
+--- a/dlls/winevulkan/loader_thunks.c
++++ b/dlls/winevulkan/loader_thunks.c
+@@ -7163,6 +7163,31 @@ VkResult WINAPI vkWriteMicromapsPropertiesEXT(VkDevice device, uint32_t micromap
+     return params.result;
+ }
+ 
++VkResult WINAPI wine_vkAcquireKeyedMutex(VkDevice device, VkDeviceMemory memory, uint64_t key, uint32_t timeout_ms)
++{
++    struct wine_vkAcquireKeyedMutex_params params;
++    NTSTATUS status;
++    params.device = device;
++    params.memory = memory;
++    params.key = key;
++    params.timeout_ms = timeout_ms;
++    status = UNIX_CALL(wine_vkAcquireKeyedMutex, &params);
++    assert(!status && "wine_vkAcquireKeyedMutex");
++    return params.result;
++}
++
++VkResult WINAPI wine_vkReleaseKeyedMutex(VkDevice device, VkDeviceMemory memory, uint64_t key)
++{
++    struct wine_vkReleaseKeyedMutex_params params;
++    NTSTATUS status;
++    params.device = device;
++    params.memory = memory;
++    params.key = key;
++    status = UNIX_CALL(wine_vkReleaseKeyedMutex, &params);
++    assert(!status && "wine_vkReleaseKeyedMutex");
++    return params.result;
++}
++
+ static const struct vulkan_func vk_device_dispatch_table[] =
+ {
+     {"vkAcquireNextImage2KHR", vkAcquireNextImage2KHR},
+@@ -7759,6 +7784,8 @@ static const struct vulkan_func vk_device_dispatch_table[] =
+     {"vkWaitSemaphoresKHR", vkWaitSemaphoresKHR},
+     {"vkWriteAccelerationStructuresPropertiesKHR", vkWriteAccelerationStructuresPropertiesKHR},
+     {"vkWriteMicromapsPropertiesEXT", vkWriteMicromapsPropertiesEXT},
++    {"wine_vkAcquireKeyedMutex", wine_vkAcquireKeyedMutex},
++    {"wine_vkReleaseKeyedMutex", wine_vkReleaseKeyedMutex},
+ };
+ 
+ static const struct vulkan_func vk_phys_dev_dispatch_table[] =
+diff --git a/dlls/winevulkan/loader_thunks.h b/dlls/winevulkan/loader_thunks.h
+index a928a1bf07d..66fa2aab6a0 100644
+--- a/dlls/winevulkan/loader_thunks.h
++++ b/dlls/winevulkan/loader_thunks.h
+@@ -689,6 +689,8 @@ enum unix_call
+     unix_vkWaitSemaphoresKHR,
+     unix_vkWriteAccelerationStructuresPropertiesKHR,
+     unix_vkWriteMicromapsPropertiesEXT,
++    unix_wine_vkAcquireKeyedMutex,
++    unix_wine_vkReleaseKeyedMutex,
+     unix_count,
+ };
+ 
+@@ -5836,4 +5838,21 @@ struct vkWriteMicromapsPropertiesEXT_params
+     VkResult result;
+ };
+ 
++struct wine_vkAcquireKeyedMutex_params
++{
++    VkDevice device;
++    VkDeviceMemory DECLSPEC_ALIGN(8) memory;
++    uint64_t DECLSPEC_ALIGN(8) key;
++    uint32_t timeout_ms;
++    VkResult result;
++};
++
++struct wine_vkReleaseKeyedMutex_params
++{
++    VkDevice device;
++    VkDeviceMemory DECLSPEC_ALIGN(8) memory;
++    uint64_t DECLSPEC_ALIGN(8) key;
++    VkResult result;
++};
++
+ #endif /* __WINE_VULKAN_LOADER_THUNKS_H */
+diff --git a/dlls/winevulkan/vulkan_thunks.c b/dlls/winevulkan/vulkan_thunks.c
+index 7f902f8ad47..8f1109f3017 100644
+--- a/dlls/winevulkan/vulkan_thunks.c
++++ b/dlls/winevulkan/vulkan_thunks.c
+@@ -61023,6 +61023,63 @@ static NTSTATUS thunk32_vkWriteMicromapsPropertiesEXT(void *args)
+     return STATUS_SUCCESS;
+ }
+ 
++#ifdef _WIN64
++static NTSTATUS thunk64_wine_vkAcquireKeyedMutex(void *args)
++{
++    struct wine_vkAcquireKeyedMutex_params *params = args;
++
++    TRACE("%p, 0x%s, 0x%s, %u\n", params->device, wine_dbgstr_longlong(params->memory), wine_dbgstr_longlong(params->key), params->timeout_ms);
++
++    params->result = vk_funcs->p_wine_vkAcquireKeyedMutex(params->device, params->memory, params->key, params->timeout_ms);
++    return STATUS_SUCCESS;
++}
++#endif /* _WIN64 */
++
++static NTSTATUS thunk32_wine_vkAcquireKeyedMutex(void *args)
++{
++    struct
++    {
++        PTR32 device;
++        VkDeviceMemory DECLSPEC_ALIGN(8) memory;
++        uint64_t DECLSPEC_ALIGN(8) key;
++        uint32_t timeout_ms;
++        VkResult result;
++    } *params = args;
++
++    TRACE("%#x, 0x%s, 0x%s, %u\n", params->device, wine_dbgstr_longlong(params->memory), wine_dbgstr_longlong(params->key), params->timeout_ms);
++
++    params->result = vk_funcs->p_wine_vkAcquireKeyedMutex((VkDevice)UlongToPtr(params->device), params->memory, params->key, params->timeout_ms);
++    return STATUS_SUCCESS;
++}
++
++#ifdef _WIN64
++static NTSTATUS thunk64_wine_vkReleaseKeyedMutex(void *args)
++{
++    struct wine_vkReleaseKeyedMutex_params *params = args;
++
++    TRACE("%p, 0x%s, 0x%s\n", params->device, wine_dbgstr_longlong(params->memory), wine_dbgstr_longlong(params->key));
++
++    params->result = vk_funcs->p_wine_vkReleaseKeyedMutex(params->device, params->memory, params->key);
++    return STATUS_SUCCESS;
++}
++#endif /* _WIN64 */
++
++static NTSTATUS thunk32_wine_vkReleaseKeyedMutex(void *args)
++{
++    struct
++    {
++        PTR32 device;
++        VkDeviceMemory DECLSPEC_ALIGN(8) memory;
++        uint64_t DECLSPEC_ALIGN(8) key;
++        VkResult result;
++    } *params = args;
++
++    TRACE("%#x, 0x%s, 0x%s\n", params->device, wine_dbgstr_longlong(params->memory), wine_dbgstr_longlong(params->key));
++
++    params->result = vk_funcs->p_wine_vkReleaseKeyedMutex((VkDevice)UlongToPtr(params->device), params->memory, params->key);
++    return STATUS_SUCCESS;
++}
++
+ static const char * const vk_device_extensions[] =
+ {
+     "VK_AMD_anti_lag",
+@@ -62134,6 +62134,8 @@ const unixlib_entry_t __wine_unix_call_funcs[] =
+     thunk64_vkWaitSemaphoresKHR,
+     thunk64_vkWriteAccelerationStructuresPropertiesKHR,
+     thunk64_vkWriteMicromapsPropertiesEXT,
++    thunk64_wine_vkAcquireKeyedMutex,
++    thunk64_wine_vkReleaseKeyedMutex,
+ };
+ C_ASSERT(ARRAYSIZE(__wine_unix_call_funcs) == unix_count);
+ 
+@@ -62814,5 +62814,7 @@ const unixlib_entry_t __wine_unix_call_funcs[] =
+     thunk32_vkWaitSemaphoresKHR,
+     thunk32_vkWriteAccelerationStructuresPropertiesKHR,
+     thunk32_vkWriteMicromapsPropertiesEXT,
++    thunk32_wine_vkAcquireKeyedMutex,
++    thunk32_wine_vkReleaseKeyedMutex,
+ };
+ C_ASSERT(ARRAYSIZE(__wine_unix_call_funcs) == unix_count);
+diff --git a/dlls/winevulkan/vulkan.c b/dlls/winevulkan/vulkan.c
+index 5e3cad1ab45..754cdd981c8 100644
+--- a/dlls/winevulkan/vulkan.c
++++ b/dlls/winevulkan/vulkan.c
+@@ -1838,6 +1838,9 @@ static NTSTATUS is_available_device_function(VkDevice handle
+     if (!strcmp(name, "vkImportFenceWin32HandleKHR"))
+         return device->has_external_fence_win32;
+ 
++    if (!strcmp(name, "wine_vkAcquireKeyedMutex") || !strcmp(name, "wine_vkReleaseKeyedMutex"))
++        return device->has_external_semaphore_win32;
++
+     return !!vk_funcs->p_vkGetDeviceProcAddr(device->obj.host.device, name);
+ }
+ 
+diff --git a/dlls/win32u/vulkan.c b/dlls/win32u/vulkan.c
+index c01724aac19..63868893513 100644
+--- a/dlls/win32u/vulkan.c
++++ b/dlls/win32u/vulkan.c
+@@ -1404,6 +1404,69 @@ static LARGE_INTEGER *get_nt_timeout( LARGE_INTEGER *time, DWORD timeout )
+     return time;
+ }
+ 
++static VkResult win32u_wine_vkAcquireKeyedMutex(VkDevice client_device, VkDeviceMemory client_memory, uint64_t key, uint32_t timeout_ms)
++{
++    NTSTATUS status;
++    LARGE_INTEGER timeout;
++    struct vulkan_device *device = vulkan_device_from_handle( client_device );
++    struct device_memory *memory = device_memory_from_handle( client_memory );
++    D3DKMT_ACQUIREKEYEDMUTEX acquire =
++    {
++        .hKeyedMutex = memory->mutex,
++        .Key = key,
++        .pTimeout = get_nt_timeout( &timeout, timeout_ms ),
++    };
++    VkSemaphoreSignalInfo signal =
++    {
++        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SIGNAL_INFO,
++        .semaphore = memory->semaphore,
++        .pNext = NULL,
++    };
++
++    if ((status = NtGdiDdDDIAcquireKeyedMutex( &acquire )))
++    {
++        WARN( "Failed to acquire keyed mutex 0x%s key 0x%s, status %#x\n", wine_dbgstr_longlong( client_memory ),
++              wine_dbgstr_longlong( key ), status );
++        return status == STATUS_TIMEOUT ? VK_TIMEOUT : VK_ERROR_UNKNOWN;
++    }
++    else
++    {
++        signal.value = memory->semaphore_value = acquire.FenceValue;
++        return device->p_vkSignalSemaphore( client_device, &signal );
++    }
++}
++
++static VkResult win32u_wine_vkReleaseKeyedMutex(VkDevice client_device, VkDeviceMemory client_memory, uint64_t key)
++{
++    NTSTATUS status;
++    struct vulkan_device *device = vulkan_device_from_handle( client_device );
++    struct device_memory *memory = device_memory_from_handle( client_memory );
++    D3DKMT_RELEASEKEYEDMUTEX release =
++    {
++        .hKeyedMutex = memory->mutex,
++        .Key = key,
++        .FenceValue = memory->semaphore_value + 1,
++    };
++    VkSemaphoreSignalInfo signal =
++    {
++        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SIGNAL_INFO,
++        .semaphore = memory->semaphore,
++        .pNext = NULL,
++    };
++
++    if ((status = NtGdiDdDDIReleaseKeyedMutex( &release )))
++    {
++        WARN( "Failed to release keyed mutex 0x%s key 0x%s, status %#x\n", wine_dbgstr_longlong( client_memory ),
++              wine_dbgstr_longlong( key ), status );
++        return VK_ERROR_UNKNOWN;
++    }
++    else
++    {
++        signal.value = memory->semaphore_value + 1;
++        return device->p_vkSignalSemaphore( client_device, &signal );
++    }
++}
++
+ static VkResult acquire_keyed_mutexes( VkWin32KeyedMutexAcquireReleaseInfoKHR *mutex_info, struct mempool *pool,
+                                        const VkSemaphoreSubmitInfo **semaphores, UINT *semaphores_count )
+ {
+@@ -2223,6 +2269,8 @@ static struct vulkan_funcs vulkan_funcs =
+     .p_vkQueueSubmit2KHR = win32u_vkQueueSubmit2,
+     .p_vkUnmapMemory = win32u_vkUnmapMemory,
+     .p_vkUnmapMemory2KHR = win32u_vkUnmapMemory2KHR,
++    .p_wine_vkAcquireKeyedMutex = win32u_wine_vkAcquireKeyedMutex,
++    .p_wine_vkReleaseKeyedMutex = win32u_wine_vkReleaseKeyedMutex,
+     .p_get_host_extension = win32u_get_host_extension,
+ };
+ 
+diff --git a/include/wine/vulkan.h b/include/wine/vulkan.h
+index a6138d23213..089cee21534 100644
+--- a/include/wine/vulkan.h
++++ b/include/wine/vulkan.h
+@@ -19633,6 +19637,8 @@ typedef VkResult (VKAPI_PTR *PFN_vkWaitSemaphores)(VkDevice, const VkSemaphoreWa
+ typedef VkResult (VKAPI_PTR *PFN_vkWaitSemaphoresKHR)(VkDevice, const VkSemaphoreWaitInfo *, uint64_t);
+ typedef VkResult (VKAPI_PTR *PFN_vkWriteAccelerationStructuresPropertiesKHR)(VkDevice, uint32_t, const VkAccelerationStructureKHR *, VkQueryType, size_t, void *, size_t);
+ typedef VkResult (VKAPI_PTR *PFN_vkWriteMicromapsPropertiesEXT)(VkDevice, uint32_t, const VkMicromapEXT *, VkQueryType, size_t, void *, size_t);
++typedef VkResult (VKAPI_PTR *PFN_wine_vkAcquireKeyedMutex)(VkDevice, VkDeviceMemory, uint64_t, uint32_t);
++typedef VkResult (VKAPI_PTR *PFN_wine_vkReleaseKeyedMutex)(VkDevice, VkDeviceMemory, uint64_t);
+ 
+ #ifndef VK_NO_PROTOTYPES
+ VkResult VKAPI_CALL vkAcquireNextImage2KHR(VkDevice device, const VkAcquireNextImageInfoKHR *pAcquireInfo, uint32_t *pImageIndex);
+@@ -20320,6 +20326,8 @@ VkResult VKAPI_CALL vkWaitSemaphores(VkDevice device, const VkSemaphoreWaitInfo
+ VkResult VKAPI_CALL vkWaitSemaphoresKHR(VkDevice device, const VkSemaphoreWaitInfo *pWaitInfo, uint64_t timeout);
+ VkResult VKAPI_CALL vkWriteAccelerationStructuresPropertiesKHR(VkDevice device, uint32_t accelerationStructureCount, const VkAccelerationStructureKHR *pAccelerationStructures, VkQueryType queryType, size_t dataSize, void *pData, size_t stride);
+ VkResult VKAPI_CALL vkWriteMicromapsPropertiesEXT(VkDevice device, uint32_t micromapCount, const VkMicromapEXT *pMicromaps, VkQueryType queryType, size_t dataSize, void *pData, size_t stride);
++VkResult VKAPI_CALL wine_vkAcquireKeyedMutex(VkDevice device, VkDeviceMemory memory, uint64_t key, uint32_t timeout_ms);
++VkResult VKAPI_CALL wine_vkReleaseKeyedMutex(VkDevice device, VkDeviceMemory memory, uint64_t key);
+ #endif /* VK_NO_PROTOTYPES */
+ 
+ #define ALL_VK_DEVICE_FUNCS \
+@@ -20924,7 +20932,9 @@ VkResult VKAPI_CALL vkWriteMicromapsPropertiesEXT(VkDevice device, uint32_t micr
+     USE_VK_FUNC(vkWaitSemaphores) \
+     USE_VK_FUNC(vkWaitSemaphoresKHR) \
+     USE_VK_FUNC(vkWriteAccelerationStructuresPropertiesKHR) \
+-    USE_VK_FUNC(vkWriteMicromapsPropertiesEXT)
++    USE_VK_FUNC(vkWriteMicromapsPropertiesEXT) \
++    USE_VK_FUNC(wine_vkAcquireKeyedMutex) \
++    USE_VK_FUNC(wine_vkReleaseKeyedMutex)
+ 
+ #define ALL_VK_INSTANCE_FUNCS \
+     USE_VK_FUNC(vkCreateDebugReportCallbackEXT) \
+@@ -21005,4 +21015,8 @@ VkResult VKAPI_CALL vkWriteMicromapsPropertiesEXT(VkDevice device, uint32_t micr
+     USE_VK_FUNC(vkGetPhysicalDeviceWin32PresentationSupportKHR) \
+     USE_VK_FUNC(vkGetPhysicalDeviceXlibPresentationSupportKHR)
+ 
++typedef VkResult (WINAPI *PFN_native_vkCreateInstance)(const VkInstanceCreateInfo *, const VkAllocationCallbacks *, VkInstance *,
++                                                       void * (*)(VkInstance, const char *), void *);
++typedef VkResult (WINAPI *PFN_native_vkCreateDevice)(VkPhysicalDevice, const VkDeviceCreateInfo *, const VkAllocationCallbacks *, VkDevice *,
++                                                     void * (*)(VkInstance, const char *), void *);
+ #endif /* __WINE_VULKAN_H */
+diff --git a/include/wine/vulkan_driver.h b/include/wine/vulkan_driver.h
+index 0187eb0ef91..8efcb1aae29 100644
+--- a/include/wine/vulkan_driver.h
++++ b/include/wine/vulkan_driver.h
+@@ -47,7 +47,7 @@ struct vulkan_client_object
+ #include "wine/rbtree.h"
+ 
+ /* Wine internal vulkan driver version, needs to be bumped upon vulkan_funcs changes. */
+-#define WINE_VULKAN_DRIVER_VERSION 47
++#define WINE_VULKAN_DRIVER_VERSION 48
+ 
+ struct vulkan_object
+ {
+@@ -258,6 +258,8 @@ struct vulkan_funcs
+     PFN_vkQueueSubmit2KHR p_vkQueueSubmit2KHR;
+     PFN_vkUnmapMemory p_vkUnmapMemory;
+     PFN_vkUnmapMemory2KHR p_vkUnmapMemory2KHR;
++    PFN_wine_vkAcquireKeyedMutex p_wine_vkAcquireKeyedMutex;
++    PFN_wine_vkReleaseKeyedMutex p_wine_vkReleaseKeyedMutex;
+ 
+     /* winevulkan specific functions */
+     const char *(*p_get_host_extension)( const char *name );
