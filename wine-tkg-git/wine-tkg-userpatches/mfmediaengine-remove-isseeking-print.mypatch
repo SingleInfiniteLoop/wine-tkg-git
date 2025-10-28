@@ -1,0 +1,13 @@
+diff --git a/dlls/mfmediaengine/main.c b/dlls/mfmediaengine/main.c
+index 23acc7331b3..addd49b5ac7 100644
+--- a/dlls/mfmediaengine/main.c
++++ b/dlls/mfmediaengine/main.c
+@@ -1832,8 +1832,6 @@ static USHORT WINAPI media_engine_GetReadyState(IMFMediaEngineEx *iface)
+ 
+ static BOOL WINAPI media_engine_IsSeeking(IMFMediaEngineEx *iface)
+ {
+-    FIXME("(%p): stub.\n", iface);
+-
+     return FALSE;
+ }
+ 
