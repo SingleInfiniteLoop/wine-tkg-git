@@ -1,3 +1,97 @@
+diff --git a/dlls/win32u/vulkan.c b/dlls/win32u/vulkan.c
+index 7b550857898..3611ac4abd0 100644
+--- a/dlls/win32u/vulkan.c
++++ b/dlls/win32u/vulkan.c
+@@ -412,6 +412,10 @@ static VkResult convert_instance_create_info( struct mempool *pool
+     const char **extensions;
+     uint32_t count = 0;
+ 
++    if ((header = (VkBaseInStructure *)info->pNext) && header->sType == VK_STRUCTURE_TYPE_CREATE_INFO_WINE_INSTANCE_CALLBACK)
++        info->pNext = header->pNext;
++
++    header = (const VkBaseInStructure *)info;
+     while ((header = find_next_struct( header->pNext, VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT )))
+     {
+         const VkDebugUtilsMessengerCreateInfoEXT *debug_utils_messenger = (const VkDebugUtilsMessengerCreateInfoEXT *)header;
+@@ -591,6 +595,9 @@ static VkResult init_physical_devices( struct vulkan_instance *instance
+ static VkResult win32u_vkCreateInstance( const VkInstanceCreateInfo *client_create_info, const VkAllocationCallbacks *allocator,
+                                          VkInstance *client_instance_ptr )
+ {
++    PFN_native_vkCreateInstance native_create_instance = NULL;
++    void *native_create_instance_context = NULL;
++    VkCreateInfoWineInstanceCallback *callback;
+     VkInstanceCreateInfo *create_info = (VkInstanceCreateInfo *)client_create_info; /* cast away const, chain has been copied in the thunks */
+     VkInstance host_instance = VK_NULL_HANDLE, client_instance = *client_instance_ptr;
+     struct vulkan_physical_device *physical_devices;
+@@ -606,8 +613,20 @@ static VkResult win32u_vkCreateInstance( const VkInstanceCreateInfo *client_create_info
+     list_init( &instance->utils_messengers );
+     list_init( &instance->report_callbacks );
+ 
++    if ((callback = (VkCreateInfoWineInstanceCallback *)create_info->pNext) &&
++        (callback->sType == VK_STRUCTURE_TYPE_CREATE_INFO_WINE_INSTANCE_CALLBACK))
++    {
++        native_create_instance = callback->native_create_callback;
++        native_create_instance_context = callback->context;
++    }
++
+     if ((res = convert_instance_create_info( &pool, create_info, instance ))) goto failed;
+-    if ((res = p_vkCreateInstance( create_info, NULL /* allocator */, &host_instance ))) goto failed;
++    if (native_create_instance)
++        res = native_create_instance( create_info, NULL /* allocator */, &host_instance,
++                                      (void *)vulkan_funcs.p_vkGetInstanceProcAddr, native_create_instance_context );
++    else
++        res = p_vkCreateInstance( create_info, NULL /* allocator */, &host_instance );
++    if (res) goto failed;
+ 
+     vulkan_object_init_ptr( &instance->obj.obj, (UINT_PTR)host_instance, &client_instance->obj );
+     instance->obj.p_insert_object = vulkan_instance_insert_object;
+@@ -593,7 +593,11 @@ static VkResult convert_device_create_info( struct vulkan_physical_device *physical_device
+     const char **extensions;
+     int ext_index;
+     uint32_t count = 0;
++    VkBaseOutStructure *header;
+ 
++    if ((header = (VkBaseOutStructure *)info->pNext) && header->sType == VK_STRUCTURE_TYPE_CREATE_INFO_WINE_DEVICE_CALLBACK)
++        info->pNext = header->pNext;
++
+     /* Should be filtered out by loader as ICDs don't support layers. */
+     info->enabledLayerCount = 0;
+     info->ppEnabledLayerNames = NULL;
+@@ -922,6 +929,10 @@ static VkResult win32u_vkCreateDevice( VkPhysicalDevice client_physical_device
+     struct mempool pool = {0};
+     VkResult res;
+ 
++    PFN_native_vkCreateDevice native_create_device = NULL;
++    void *native_create_device_context = NULL;
++    VkCreateInfoWineDeviceCallback *callback;
++
+     if (TRACE_ON(vulkan))
+     {
+         VkPhysicalDeviceProperties properties = {0};
+@@ -943,8 +954,22 @@ static VkResult win32u_vkCreateDevice( VkPhysicalDevice client_physical_device
+     if (!(device = calloc( 1, offsetof(struct vulkan_device, queues[queue_count]) ))) return VK_ERROR_OUT_OF_HOST_MEMORY;
+     device->extensions = client_device->extensions;
+ 
++    if ((callback = (VkCreateInfoWineDeviceCallback *)create_info->pNext) &&
++        (callback->sType == VK_STRUCTURE_TYPE_CREATE_INFO_WINE_DEVICE_CALLBACK))
++    {
++        native_create_device = callback->native_create_callback;
++        native_create_device_context = callback->context;
++    }
++
+     if ((res = convert_device_create_info( physical_device, create_info, &pool, device ))) goto failed;
+-    if ((res = instance->p_vkCreateDevice( physical_device->host.physical_device, create_info, NULL /* allocator */, &host_device ))) goto failed;
++    if (native_create_device)
++        res = native_create_device( physical_device->host.physical_device,
++                                    create_info, NULL /* allocator */, &host_device,
++                                    (void *)vulkan_funcs.p_vkGetInstanceProcAddr, native_create_device_context);
++    else
++        res = instance->p_vkCreateDevice( physical_device->host.physical_device,
++                                          create_info, NULL /* allocator */, &host_device );
++    if (res) goto failed;
+ 
+     vulkan_object_init_ptr( &device->obj, (UINT_PTR)host_device, &client_device->obj );
+     device->physical_device = physical_device;
 diff --git a/dlls/winevulkan/make_vulkan b/dlls/winevulkan/make_vulkan
 index ecc84b54a51..cfb71f8bec7 100755
 --- a/dlls/winevulkan/make_vulkan
@@ -23,7 +117,7 @@ index ecc84b54a51..cfb71f8bec7 100755
              body += "        }\n"
              body += "    }\n"
 @@ -3148,6 +3159,28 @@ class VkGenerator(object):
-                 f.write(" \\\n    USE_VK_FUNC({0})".format(vk_func.name))
+                 f.write(f" \\\n    USE_VK_EXT({name})")
          f.write("\n\n")
  
 +        f.write("typedef VkResult (WINAPI *PFN_native_vkCreateInstance)(const VkInstanceCreateInfo *, const VkAllocationCallbacks *, VkInstance *,\n")
@@ -51,105 +145,3 @@ index ecc84b54a51..cfb71f8bec7 100755
          f.write("#endif /* __WINE_VULKAN_H */\n")
  
      def generate_vulkan_spec(self, f):
-diff --git a/dlls/winevulkan/vulkan.c b/dlls/winevulkan/vulkan.c
-index 7b550857898..3611ac4abd0 100644
---- a/dlls/winevulkan/vulkan.c
-+++ b/dlls/winevulkan/vulkan.c
-@@ -593,9 +593,13 @@ static VkResult wine_vk_device_convert_create_info(VkPhysicalDevice client_physi
-     const char **extensions;
-     int ext_index, i;
-     uint32_t count;
-+    VkBaseOutStructure *header;
- 
-     *dst = *src;
- 
-+    if ((header = (VkBaseOutStructure *)dst->pNext) && header->sType == VK_STRUCTURE_TYPE_CREATE_INFO_WINE_DEVICE_CALLBACK)
-+        dst->pNext = header->pNext;
-+
-     /* Should be filtered out by loader as ICDs don't support layers. */
-     dst->enabledLayerCount = 0;
-     dst->ppEnabledLayerNames = NULL;
-@@ -707,6 +711,9 @@ static VkResult wine_vk_instance_convert_create_info(struct conversion_context *
- 
-     *dst = *src;
- 
-+    if ((header = (VkBaseInStructure *)dst->pNext) && header->sType == VK_STRUCTURE_TYPE_CREATE_INFO_WINE_INSTANCE_CALLBACK)
-+        dst->pNext = header->pNext;
-+
-     instance->utils_messenger_count = wine_vk_count_struct(dst, DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT);
-     instance->utils_messengers =  calloc(instance->utils_messenger_count, sizeof(*instance->utils_messengers));
-     header = (VkBaseInStructure *) dst;
-@@ -922,6 +929,10 @@ VkResult wine_vkCreateDevice(VkPhysicalDevice phys_dev_handle, const VkDeviceCre
-     unsigned int queue_count, i;
-     VkResult res;
- 
-+    PFN_native_vkCreateDevice native_create_device = NULL;
-+    void *native_create_device_context = NULL;
-+    VkCreateInfoWineDeviceCallback *callback;
-+
-     if (allocator)
-         FIXME("Support for allocation callbacks not implemented yet\n");
- 
-@@ -943,11 +954,25 @@ VkResult wine_vkCreateDevice(VkPhysicalDevice phys_dev_handle, const VkDeviceCre
-     if (!(device = calloc(1, offsetof(struct wine_device, queues[queue_count]))))
-         return VK_ERROR_OUT_OF_HOST_MEMORY;
- 
-+    if ((callback = (VkCreateInfoWineDeviceCallback *)create_info->pNext)
-+            && callback->sType == VK_STRUCTURE_TYPE_CREATE_INFO_WINE_DEVICE_CALLBACK)
-+    {
-+        native_create_device = callback->native_create_callback;
-+        native_create_device_context = callback->context;
-+    }
-+
-     init_conversion_context(&ctx);
-     res = wine_vk_device_convert_create_info(physical_device, &ctx, create_info, &create_info_host, device);
-     if (res == VK_SUCCESS)
--        res = instance->p_vkCreateDevice(physical_device->host.physical_device, &create_info_host,
--                                               NULL /* allocator */, &host_device);
-+    {
-+        if (native_create_device)
-+            res = native_create_device(physical_device->host.physical_device,
-+                    &create_info_host, NULL /* allocator */, &host_device,
-+                    (void *)vk_funcs->p_vkGetInstanceProcAddr, native_create_device_context);
-+        else
-+            res = instance->p_vkCreateDevice(physical_device->host.physical_device,
-+                    &create_info_host, NULL /* allocator */, &host_device);
-+    }
-     free_conversion_context(&ctx);
-     if (res != VK_SUCCESS)
-     {
-@@ -990,6 +1015,9 @@ VkResult wine_vkCreateInstance(const VkInstanceCreateInfo *create_info,
-                                const VkAllocationCallbacks *allocator, VkInstance *ret,
-                                void *client_ptr)
- {
-+    PFN_native_vkCreateInstance native_create_instance = NULL;
-+    void *native_create_instance_context = NULL;
-+    VkCreateInfoWineInstanceCallback *callback;
-     VkInstanceCreateInfo create_info_host;
-     const VkApplicationInfo *app_info;
-     struct conversion_context ctx;
-@@ -1008,10 +1036,23 @@ VkResult wine_vkCreateInstance(const VkInstanceCreateInfo *create_info,
-     }
-     physical_devices = (struct vulkan_physical_device *)(instance + 1);
- 
-+    if ((callback = (VkCreateInfoWineInstanceCallback *)create_info->pNext)
-+            && callback->sType == VK_STRUCTURE_TYPE_CREATE_INFO_WINE_INSTANCE_CALLBACK)
-+    {
-+        native_create_instance = callback->native_create_callback;
-+        native_create_instance_context = callback->context;
-+    }
-+
-     init_conversion_context(&ctx);
-     res = wine_vk_instance_convert_create_info(&ctx, create_info, &create_info_host, instance);
-     if (res == VK_SUCCESS)
--        res = p_vkCreateInstance(&create_info_host, NULL /* allocator */, &host_instance);
-+    {
-+        if (native_create_instance)
-+            res = native_create_instance(&create_info_host, NULL /* allocator */, &host_instance,
-+                    (void *)vk_funcs->p_vkGetInstanceProcAddr, native_create_instance_context);
-+        else
-+            res = p_vkCreateInstance(&create_info_host, NULL /* allocator */, &host_instance);
-+    }
-     free_conversion_context(&ctx);
-     if (res != VK_SUCCESS)
-     {
