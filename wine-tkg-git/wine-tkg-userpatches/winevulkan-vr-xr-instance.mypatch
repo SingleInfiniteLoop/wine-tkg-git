@@ -23,7 +23,7 @@ index ecc84b54a51..cfb71f8bec7 100755
              body += "        }\n"
              body += "    }\n"
 @@ -3148,6 +3159,28 @@ class VkGenerator(object):
-                 f.write(" \\\n    USE_VK_FUNC({0})".format(vk_func.name))
+                 f.write(f" \\\n    USE_VK_EXT({name})")
          f.write("\n\n")
  
 +        f.write("typedef VkResult (WINAPI *PFN_native_vkCreateInstance)(const VkInstanceCreateInfo *, const VkAllocationCallbacks *, VkInstance *,\n")
@@ -57,8 +57,8 @@ index 7b550857898..3611ac4abd0 100644
 +++ b/dlls/winevulkan/vulkan.c
 @@ -593,9 +593,13 @@ static VkResult wine_vk_device_convert_create_info(VkPhysicalDevice client_physi
      const char **extensions;
-     int ext_index, i;
-     uint32_t count;
+     int ext_index;
+     uint32_t count = 0;
 +    VkBaseOutStructure *header;
  
      *dst = *src;
@@ -91,8 +91,8 @@ index 7b550857898..3611ac4abd0 100644
          FIXME("Support for allocation callbacks not implemented yet\n");
  
 @@ -943,11 +954,25 @@ VkResult wine_vkCreateDevice(VkPhysicalDevice phys_dev_handle, const VkDeviceCre
-     if (!(device = calloc(1, offsetof(struct wine_device, queues[queue_count]))))
          return VK_ERROR_OUT_OF_HOST_MEMORY;
+     device->obj.extensions = client_device->extensions;
  
 +    if ((callback = (VkCreateInfoWineDeviceCallback *)create_info->pNext)
 +            && callback->sType == VK_STRUCTURE_TYPE_CREATE_INFO_WINE_DEVICE_CALLBACK)
@@ -126,11 +126,11 @@ index 7b550857898..3611ac4abd0 100644
 +    void *native_create_instance_context = NULL;
 +    VkCreateInfoWineInstanceCallback *callback;
      VkInstanceCreateInfo create_info_host;
-     const VkApplicationInfo *app_info;
      struct conversion_context ctx;
+     struct wine_instance *instance;
 @@ -1008,10 +1036,23 @@ VkResult wine_vkCreateInstance(const VkInstanceCreateInfo *create_info,
-     }
      physical_devices = (struct vulkan_physical_device *)(instance + 1);
+     instance->obj.extensions = client_instance->extensions;
  
 +    if ((callback = (VkCreateInfoWineInstanceCallback *)create_info->pNext)
 +            && callback->sType == VK_STRUCTURE_TYPE_CREATE_INFO_WINE_INSTANCE_CALLBACK)

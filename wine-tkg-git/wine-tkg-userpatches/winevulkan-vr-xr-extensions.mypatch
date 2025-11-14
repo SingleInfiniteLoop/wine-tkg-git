@@ -2,7 +2,7 @@ diff --git a/dlls/winevulkan/vulkan.c b/dlls/winevulkan/vulkan.c
 index e7d00813a42..f1da22dc772 100644
 --- a/dlls/winevulkan/vulkan.c
 +++ b/dlls/winevulkan/vulkan.c
-@@ -531,9 +531,86 @@ static void wine_vk_device_init_queues(struct wine_device *object
+@@ -531,11 +531,89 @@ static void wine_vk_device_init_queues(struct wine_device *object
      object->queue_count += info->queueCount;
  }
  
@@ -86,68 +86,30 @@ index e7d00813a42..f1da22dc772 100644
  {
 +    static const char *wine_xr_extension_name = "VK_WINE_openxr_device_extensions";
 +    static const char *wine_vr_extension_name = "VK_WINE_openvr_device_extensions";
-     bool has_swapchain_maintenance1 = false;
-     bool has_external_memory_host = false;
-     bool has_surface_maintenance1 = false;
-@@ -539,6 +585,7 @@ static VkResult wine_vk_device_convert_create_info(VkPhysicalDevice client_physi
-     bool has_map_memory2 = false;
-     bool has_swapchain = false;
+     struct vulkan_instance *instance = physical_device->instance;
      const char **extensions;
-+    int ext_index, i;
-     uint32_t count;
++    int ext_index;
+     uint32_t count = 0;
  
      *dst = *src;
-@@ -559,17 +605,12 @@ static VkResult wine_vk_device_convert_create_info(VkPhysicalDevice client_physi
-     dst->ppEnabledLayerNames = NULL;
+@@ -620,6 +605,20 @@ static VkResult wine_vk_device_convert_create_info(VkPhysicalDevice client_physi
+     ALL_VK_DEVICE_EXTS
+ #undef USE_VK_EXT
  
-     count = src->enabledExtensionCount;
--    extensions = conversion_context_alloc(ctx, (count + 16) * sizeof(*extensions));
-+    extensions = conversion_context_alloc(ctx, (count + 32) * sizeof(*extensions));
-     memcpy(extensions, dst->ppEnabledExtensionNames, count * sizeof(*extensions));
-     dst->ppEnabledExtensionNames = extensions;
- 
-     for (const char **extension = extensions, **end = extension + count; extension < end; extension++)
-     {
--        if (!wine_vk_device_extension_supported(*extension))
--        {
--            WARN("Extension %s is not supported.\n", debugstr_a(*extension));
--            return VK_ERROR_EXTENSION_NOT_PRESENT;
--        }
-         if (!strcmp(*extension, "VK_EXT_map_memory_placed")) has_map_memory_placed = true;
-         if (!strcmp(*extension, "VK_KHR_map_memory2")) has_map_memory2 = true;
-         if (!strcmp(*extension, "VK_KHR_external_memory")) has_external_memory = true;
-@@ -620,6 +605,22 @@ static VkResult wine_vk_device_convert_create_info(VkPhysicalDevice client_physi
-         }
-     }
- 
-+    ext_index = extension_index(extensions, count, wine_xr_extension_name);
++    ext_index = extension_index(dst->ppEnabledExtensionNames, dst->enabledExtensionCount,
++                                wine_xr_extension_name);
 +    if (ext_index >= 0)
 +    {
 +        parse_openxr_extensions(ctx, extensions, &count);
-+        for (i = ext_index; i < (count - 1); i++) extensions[i] = extensions[i + 1];
-+        count--;
 +    }
 +
-+    ext_index = extension_index(extensions, count, wine_vr_extension_name);
++    ext_index = extension_index(dst->ppEnabledExtensionNames, dst->enabledExtensionCount,
++                                wine_vr_extension_name);
 +    if (ext_index >= 0)
 +    {
 +        parse_openvr_extensions(ctx, extensions, &count, physical_device);
-+        for (i = ext_index; i < (count - 1); i++) extensions[i] = extensions[i + 1];
-+        count--;
 +    }
 +
-     if (physical_device->map_placed_align)
-     {
-         VkPhysicalDeviceMapMemoryPlacedFeaturesEXT *map_placed_features;
-@@ -688,11 +749,6 @@ static VkResult wine_vk_instance_convert_create_info(struct conversion_context *
-     {
-         const char *extension_name = src->ppEnabledExtensionNames[i];
-         TRACE("Extension %u: %s.\n", i, debugstr_a(extension_name));
--        if (!wine_vk_instance_extension_supported(extension_name))
--        {
--            WARN("Extension %s is not supported.\n", debugstr_a(extension_name));
--            return VK_ERROR_EXTENSION_NOT_PRESENT;
--        }
-     }
- 
-     count = src->enabledExtensionCount;
+     TRACE("Enabling %u host device extensions\n", count);
+     for (const char **extension = extensions, **end = extension + count; extension < end; extension++)
+         TRACE("  - %s\n", debugstr_a(*extension));
