@@ -198,12 +198,12 @@ _script_init() {
         exit 1
       }
     fi
-    if [[ "$_NOLIB32" != "true" ]] && [ "$_NOLIB32" != "wow64" ]; then
-      install_deps "32" "${_ci_build}" || {
-        error "32-bit dependencies installation failed. Please check the error message and install the missing dependencies manually."
-        exit 1
-      }
-    fi
+    #if [[ "$_NOLIB32" != "true" ]] && [ "$_NOLIB32" != "wow64" ]; then
+    #  install_deps "32" "${_ci_build}" || {
+    #    error "32-bit dependencies installation failed. Please check the error message and install the missing dependencies manually."
+    #    exit 1
+    #  }
+    #fi
   fi
 
   # this script makes external builds already and we don't want the specific pacman-related stuff to interfere, so enforce _EXTERNAL_INSTALL="false" when not building proton-tkg
