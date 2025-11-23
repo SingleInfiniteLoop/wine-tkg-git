@@ -1,0 +1,108 @@
+diff --git a/dlls/winegstreamer/mfplat.c b/dlls/winegstreamer/mfplat.c
+index 32ab2c41d27..bec1d094b63 100644
+--- a/dlls/winegstreamer/mfplat.c
++++ b/dlls/winegstreamer/mfplat.c
+@@ -44,6 +44,8 @@ DEFINE_MEDIATYPE_GUID(MFVideoFormat_IV50,MAKEFOURCC('I','V','5','0'));
+ DEFINE_MEDIATYPE_GUID(MFVideoFormat_ABGR32,D3DFMT_A8B8G8R8);
+ DEFINE_GUID(MEDIASUBTYPE_WMV_Unknown, 0x7ce12ca9,0xbfbf,0x43d9,0x9d,0x00,0x82,0xb8,0xed,0x54,0x31,0x6b);
+ 
++DEFINE_GUID(MF_SCRUBBING_SERVICE, 0xdd0ac3d8,0x40e3,0x4128,0xac,0x48,0xc0,0xad,0xd0,0x67,0xb7,0x14);
++
+ struct class_factory
+ {
+     IClassFactory IClassFactory_iface;
+diff --git a/dlls/winegstreamer/media_source.c b/dlls/winegstreamer/media_source.c
+index cd2ea89bb76..567b30f843a 100644
+--- a/dlls/winegstreamer/media_source.c
++++ b/dlls/winegstreamer/media_source.c
+@@ -177,6 +177,7 @@ struct media_source
+ {
+     IMFMediaSource IMFMediaSource_iface;
+     IMFGetService IMFGetService_iface;
++    IMFSeekInfo IMFSeekInfo_iface;
+     IMFRateSupport IMFRateSupport_iface;
+     IMFRateControl IMFRateControl_iface;
+     IMFAsyncCallback async_commands_callback;
+@@ -224,6 +225,11 @@ static inline struct media_source *impl_from_IMFGetService(IMFGetService *iface)
+     return CONTAINING_RECORD(iface, struct media_source, IMFGetService_iface);
+ }
+ 
++static inline struct media_source *impl_from_IMFSeekInfo(IMFSeekInfo *iface)
++{
++    return CONTAINING_RECORD(iface, struct media_source, IMFSeekInfo_iface);
++}
++
+ static inline struct media_source *impl_from_IMFRateSupport(IMFRateSupport *iface)
+ {
+     return CONTAINING_RECORD(iface, struct media_source, IMFRateSupport_iface);
+@@ -1203,6 +1209,13 @@ static HRESULT WINAPI media_source_get_service_GetService(IMFGetService *iface,
+             *obj = &source->IMFRateControl_iface;
+         }
+     }
++    else if (IsEqualIID(service, &MF_SCRUBBING_SERVICE))
++    {
++        if (IsEqualIID(riid, &IID_IMFSeekInfo))
++        {
++            *obj = &source->IMFSeekInfo_iface;
++        }
++    }
+     else
+         FIXME("Unsupported service %s.\n", debugstr_guid(service));
+ 
+@@ -1343,6 +1356,48 @@ static const IMFRateControlVtbl media_source_rate_control_vtbl =
+     media_source_rate_control_GetRate,
+ };
+ 
++static HRESULT WINAPI media_source_seek_info_QueryInterface(IMFSeekInfo *iface, REFIID riid, void **obj)
++{
++    struct media_source *source = impl_from_IMFSeekInfo(iface);
++    return IMFMediaSource_QueryInterface(&source->IMFMediaSource_iface, riid, obj);
++}
++
++static ULONG WINAPI media_source_seek_info_AddRef(IMFSeekInfo *iface)
++{
++    struct media_source *source = impl_from_IMFSeekInfo(iface);
++    return IMFMediaSource_AddRef(&source->IMFMediaSource_iface);
++}
++
++static ULONG WINAPI media_source_seek_info_Release(IMFSeekInfo *iface)
++{
++    struct media_source *source = impl_from_IMFSeekInfo(iface);
++    return IMFMediaSource_Release(&source->IMFMediaSource_iface);
++}
++
++static HRESULT WINAPI media_source_seek_info_GetNearestKeyFrames(IMFSeekInfo *iface, const GUID *format,
++        const PROPVARIANT *position, PROPVARIANT *prev_frame, PROPVARIANT *next_frame)
++{
++    struct media_source *source = impl_from_IMFSeekInfo(iface);
++
++    FIXME("(%p)->(%s, %p, %p, %p) - semi-stub\n", source, debugstr_guid(format), position, prev_frame, next_frame);
++
++    if (source->state == SOURCE_SHUTDOWN)
++        return MF_E_SHUTDOWN;
++
++    PropVariantCopy(prev_frame, position);
++    PropVariantCopy(next_frame, position);
++
++    return S_OK;
++}
++
++static const IMFSeekInfoVtbl media_source_seek_info_vtbl =
++{
++    media_source_seek_info_QueryInterface,
++    media_source_seek_info_AddRef,
++    media_source_seek_info_Release,
++    media_source_seek_info_GetNearestKeyFrames,
++};
++
+ static HRESULT WINAPI media_source_QueryInterface(IMFMediaSource *iface, REFIID riid, void **out)
+ {
+     struct media_source *source = impl_from_IMFMediaSource(iface);
+@@ -1697,6 +1752,7 @@ static HRESULT media_source_create(struct object_context *context, IMFMediaSourc
+ 
+     object->IMFMediaSource_iface.lpVtbl = &IMFMediaSource_vtbl;
+     object->IMFGetService_iface.lpVtbl = &media_source_get_service_vtbl;
++    object->IMFSeekInfo_iface.lpVtbl = &media_source_seek_info_vtbl;
+     object->IMFRateSupport_iface.lpVtbl = &media_source_rate_support_vtbl;
+     object->IMFRateControl_iface.lpVtbl = &media_source_rate_control_vtbl;
+     object->async_commands_callback.lpVtbl = &source_async_commands_callback_vtbl;
