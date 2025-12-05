@@ -315,9 +315,9 @@ index d0f8be6c309..f9f6e252b6c 100644
          if (offset && offset->QuadPart != FILE_USE_FILE_POINTER_POSITION)
          {
              /* async I/O doesn't make sense on regular files */
-@@ -6823,6 +7054,9 @@ NTSTATUS WINAPI NtCancelIoFile( HANDLE handle, IO_STATUS_BLOCK *io_status )
- 
-     TRACE( "%p %p\n", handle, io_status );
+@@ -6823,6 +7054,9 @@ static NTSTATUS cancel_io( HANDLE handle, IO_STATUS_BLOCK *io
+     HANDLE cancel_handle;
+     unsigned int status;
  
 +    if (ac_odyssey && !cancel_async_file_read( handle, NULL ))
 +        return (io_status->Status = STATUS_SUCCESS);
@@ -325,16 +325,6 @@ index d0f8be6c309..f9f6e252b6c 100644
      SERVER_START_REQ( cancel_async )
      {
          req->handle      = wine_server_obj_handle( handle );
-@@ -6848,6 +7082,9 @@ NTSTATUS WINAPI NtCancelIoFileEx( HANDLE handle, IO_STATUS_BLOCK *io, IO_STATUS_
- 
-     TRACE( "%p %p %p\n", handle, io, io_status );
- 
-+    if (ac_odyssey && !cancel_async_file_read( handle, io ))
-+        return (io_status->Status = STATUS_SUCCESS);
-+
-     SERVER_START_REQ( cancel_async )
-     {
-         req->handle = wine_server_obj_handle( handle );
 diff --git a/dlls/ntdll/unix/fsync.c b/dlls/ntdll/unix/fsync.c
 index f5ae0a821b0..284e2fcce01 100644
 --- a/dlls/ntdll/unix/fsync.c
