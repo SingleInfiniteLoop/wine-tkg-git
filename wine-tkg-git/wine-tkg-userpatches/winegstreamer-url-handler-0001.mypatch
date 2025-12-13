@@ -80,8 +80,8 @@ index 32eb6e1a4a0..f82f555f6b8 100644
 --- a/dlls/winegstreamer/quartz_parser.c
 +++ b/dlls/winegstreamer/quartz_parser.c
 @@ -1659,7 +1659,7 @@ static HRESULT parser_create(BOOL output_compressed, struct parser **parser)
-     if (!(object = calloc(1, sizeof(*object))))
-         return E_OUTOFMEMORY;
+ 
+     object->output_compressed = output_compressed;
  
 -    if (!(object->wg_parser = wg_parser_create(output_compressed)))
 +    if (!(object->wg_parser = wg_parser_create(WG_PARSER_DECODEBIN, output_compressed)))
