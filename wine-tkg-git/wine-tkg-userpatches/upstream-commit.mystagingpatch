@@ -1,0 +1,14 @@
+diff --git a/staging/VERSION b/staging/VERSION
+index 6c49bdea1fff775ff5faff7d2bd532dbd124760b..275e9dd93547df1bad0cf2c00e1bdb403a526fd6 100644
+--- a/staging/VERSION
++++ b/staging/VERSION
+@@ -1 +1 @@
+-Wine Staging 11.2
++Wine Staging 11.3
+diff --git a/staging/upstream-commit b/staging/upstream-commit
+index 6c49bdea1fff775ff5faff7d2bd532dbd124760b..275e9dd93547df1bad0cf2c00e1bdb403a526fd6 100644
+--- a/staging/upstream-commit
++++ b/staging/upstream-commit
+@@ -1 +1 @@
+-cad3c22fede8988ee5c9d460812788d81a425c7c
++222c976140d1b66c71769296f856f6523782b6c9
