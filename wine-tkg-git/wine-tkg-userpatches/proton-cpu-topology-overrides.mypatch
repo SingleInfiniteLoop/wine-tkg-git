@@ -357,8 +357,8 @@ index bf3d6c34f14..fc8165f2828 100644
 +    peb->NumberOfProcessors = cpu_override.mapping.cpu_count
 +            ? cpu_override.mapping.cpu_count : num;
      init_cpu_model();
+     get_random( &process_cookie, sizeof(process_cookie) );
  }
- 
 diff --git a/dlls/ntdll/unix/thread.c b/dlls/ntdll/unix/thread.c
 index ca5dac43bb0..bc6a5451611 100644
 --- a/dlls/ntdll/unix/thread.c
