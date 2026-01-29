@@ -885,8 +885,8 @@ index aa120ae38ec..fdda50575d1 100644
  #include "unix_private.h"
 +#include "esync.h"
  #include "wine/list.h"
- #include "ntsyscalls.h"
  #include "wine/debug.h"
+ 
 @@ -1790,6 +1791,7 @@ static void start_main_thread(void)
      signal_init_threading();
      dbg_init();

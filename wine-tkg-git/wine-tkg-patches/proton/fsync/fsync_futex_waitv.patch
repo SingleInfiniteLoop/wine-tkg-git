@@ -829,9 +829,9 @@ diff --git a/dlls/ntdll/unix/unix_private.h b/dlls/ntdll/unix/unix_private.h
 index dbd3e645976..683c2a4f1c2 100644
 --- a/dlls/ntdll/unix/unix_private.h
 +++ b/dlls/ntdll/unix/unix_private.h
-@@ -146,6 +146,9 @@ #ifdef __i386__
- extern pthread_mutex_t fd_cache_mutex;
+@@ -147,6 +147,9 @@ #ifdef __i386__
  extern struct _KUSER_SHARED_DATA *user_shared_data;
+ extern ULONG process_cookie;
  
 +extern BOOL ac_odyssey;
 +extern BOOL fsync_simulate_sched_quantum;
