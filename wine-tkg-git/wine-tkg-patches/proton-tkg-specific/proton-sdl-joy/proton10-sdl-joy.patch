@@ -1541,7 +1541,7 @@ index f3f5fdc4fd8..ac5b89747f7 100644
 +EXTRADLLFLAGS = -Wb,--prefer-native
  PARENTSRC = ../dinput
  
- SOURCES = \
+ VER_FILEDESCRIPTION_STR = "Wine DirectInput 8"
 -- 
 2.51.0
 
