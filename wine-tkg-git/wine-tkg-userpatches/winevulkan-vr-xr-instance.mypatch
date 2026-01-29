@@ -117,7 +117,7 @@ index ecc84b54a51..cfb71f8bec7 100755
              body += "        }\n"
              body += "    }\n"
 @@ -3148,6 +3159,28 @@ class VkGenerator(object):
-                 f.write(f" \\\n    USE_VK_EXT({name})")
+                 f.write(f" \\\n    USE_VK_EXT({ext.name})")
          f.write("\n\n")
  
 +        f.write("typedef VkResult (WINAPI *PFN_native_vkCreateInstance)(const VkInstanceCreateInfo *, const VkAllocationCallbacks *, VkInstance *,\n")
