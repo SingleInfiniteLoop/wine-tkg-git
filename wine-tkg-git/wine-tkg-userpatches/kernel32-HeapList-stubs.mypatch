@@ -104,9 +104,9 @@ index 5e1ec84d100..080c5ed7459 100644
 +    PHANDLE             hlist = 0;
  
      TRACE("%lx,%lx\n", flags, process );
--    if (!(flags & (TH32CS_SNAPPROCESS|TH32CS_SNAPTHREAD|TH32CS_SNAPMODULE)))
+-    if (!(flags & (TH32CS_SNAPPROCESS|TH32CS_SNAPTHREAD|TH32CS_SNAPMODULE|TH32CS_SNAPMODULE32)))
 +    if (!(flags & (TH32CS_SNAPPROCESS | TH32CS_SNAPTHREAD | \
-+                   TH32CS_SNAPMODULE | TH32CS_SNAPHEAPLIST)))
++                   TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32 | TH32CS_SNAPHEAPLIST)))
      {
          FIXME("flags %lx not implemented\n", flags );
          SetLastError( ERROR_CALL_NOT_IMPLEMENTED );
