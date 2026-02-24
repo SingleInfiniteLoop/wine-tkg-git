@@ -1,0 +1,12 @@
+diff --git a/libs/vkd3d/libs/vkd3d-shader/vkd3d_shader_private.h b/libs/vkd3d/libs/vkd3d-shader/vkd3d_shader_private.h
+index 18a3f3601ea..f596ba63aa2 100644
+--- a/libs/vkd3d/libs/vkd3d-shader/vkd3d_shader_private.h
++++ b/libs/vkd3d/libs/vkd3d-shader/vkd3d_shader_private.h
+@@ -51,6 +51,7 @@
+ #include "vkd3d_shader.h"
+ #include "wine/list.h"
+ 
++#include <sys/types.h>
+ #include <inttypes.h>
+ #include <limits.h>
+ #include <stdbool.h>
