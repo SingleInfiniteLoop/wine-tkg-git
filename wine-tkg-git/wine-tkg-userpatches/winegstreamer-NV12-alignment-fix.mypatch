@@ -25,8 +25,8 @@ index 9755548790d..eeee52c39eb 100644
      GstBuffer *buffer;
      GstMapInfo map_info;
  
--    bool flushing, eos, enabled, has_tags, has_buffer, no_more_pads;
-+    bool flushing, eos, enabled, has_tags, has_buffer, no_more_pads, fix_nv12;
+-    bool flushing, eos, enabled, has_tags, has_buffer, no_more_pads, get_buffer_called;
++    bool flushing, eos, enabled, has_tags, has_buffer, no_more_pads, get_buffer_called, fix_nv12;
  
      uint64_t duration;
      gchar *tags[WG_PARSER_TAG_COUNT];
