@@ -70,7 +70,7 @@ index aa987a80186..be25b2213d9 100644
 +++ b/dlls/ntdll/unix/loadorder.c
 @@ -378,6 +378,11 @@ void set_load_order_app_name( const WCHAR *app_name )
   */
- enum loadorder get_load_order( const UNICODE_STRING *nt_name )
+ enum loadorder get_load_order( const UNICODE_STRING *nt_name, void *version_res, ULONG version_len )
  {
 +    static const WCHAR easyanticheat_x86W[] = {'e','a','s','y','a','n','t','i','c','h','e','a','t','_','x','8','6','.','d','l','l',0};
 +    static const WCHAR easyanticheat_x64W[] = {'e','a','s','y','a','n','t','i','c','h','e','a','t','_','x','6','4','.','d','l','l',0};
@@ -235,8 +235,8 @@ index 3d9575d83f2..a13d54ec263 100644
  static BOOL main_exe_loaded;
 +static BOOL eac_launcher_process;
  
- 
  /***************************************************************************
+  *	get_version_entry
 @@ -362,11 +363,24 @@ static enum loadorder get_load_order_value( HANDLE std_key, HANDLE app_key, WCHA
   */
  void set_load_order_app_name( const WCHAR *app_name )
@@ -262,7 +262,7 @@ index 3d9575d83f2..a13d54ec263 100644
  }
  
  
-@@ -405,6 +419,13 @@ enum loadorder get_load_order( const UNICODE_STRING *nt_name )
+@@ -405,6 +419,13 @@ enum loadorder get_load_order( const UNICODE_STRING *nt_name, void *version_res, ULONG version_len )
          ULONG size = 256;
          char *buffer;
  
