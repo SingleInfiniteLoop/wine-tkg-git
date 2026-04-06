@@ -68,9 +68,9 @@ diff --git a/dlls/ntdll/unix/loadorder.c b/dlls/ntdll/unix/loadorder.c
 index aa987a80186..be25b2213d9 100644
 --- a/dlls/ntdll/unix/loadorder.c
 +++ b/dlls/ntdll/unix/loadorder.c
-@@ -378,6 +378,11 @@ void set_load_order_app_name( const WCHAR *app_name )
-  */
- enum loadorder get_load_order( const UNICODE_STRING *nt_name, void *version_res, ULONG version_len )
+@@ -379,6 +379,11 @@ void set_load_order_app_name( const WCHAR *app_name )
+ enum loadorder get_load_order( const UNICODE_STRING *nt_name, BOOL is_system_dir,
+                                const struct pe_mapping_info *pe_mapping )
  {
 +    static const WCHAR easyanticheat_x86W[] = {'e','a','s','y','a','n','t','i','c','h','e','a','t','_','x','8','6','.','d','l','l',0};
 +    static const WCHAR easyanticheat_x64W[] = {'e','a','s','y','a','n','t','i','c','h','e','a','t','_','x','6','4','.','d','l','l',0};
@@ -121,10 +121,9 @@ index aa987a80186..be25b2213d9 100644
 +        }
 +    }
 +
-     /* Strip path information if the module resides in the system directory
-      */
-     if (len > wcslen(system_dir) - 4 && !wcsnicmp( system_dir + 4, path, wcslen(system_dir) - 4 ))
-
+     if (!(module = malloc( (len + 2) * sizeof(WCHAR) ))) return ret;
+     memcpy( module + 1, path, len * sizeof(WCHAR) );  /* reserve module[0] for the wildcard char */
+     module[len + 1] = 0;
 From 9dce79072ef483dda3674345eaf2274fd06dac89 Mon Sep 17 00:00:00 2001
 From: Derek Lesho <dlesho@codeweavers.com>
 Date: Fri, 21 Jan 2022 14:42:12 -0500
