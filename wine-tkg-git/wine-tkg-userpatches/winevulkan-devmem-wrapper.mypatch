@@ -1,0 +1,94 @@
+diff --git a/dlls/win32u/vulkan.c b/dlls/win32u/vulkan.c
+index 54ab9dd3555..97a37be6079 100644
+--- a/dlls/win32u/vulkan.c
++++ b/dlls/win32u/vulkan.c
+@@ -697,6 +697,8 @@ static VkResult win32u_vkCreateInstance( const VkInstanceCreateInfo *client_crea
+     list_init( &instance->utils_messengers );
+     list_init( &instance->report_callbacks );
+ 
++    pthread_key_create(&instance->obj.transient_object_handle, free);
++
+     if ((res = convert_instance_create_info( &pool, create_info, instance ))) goto failed;
+     if ((res = p_vkCreateInstance( create_info, NULL /* allocator */, &host_instance ))) goto failed;
+ 
+@@ -756,6 +758,7 @@ static void win32u_vkDestroyInstance( VkInstance client_instance, const VkAlloca
+     if (instance->objects.compare) pthread_rwlock_destroy( &instance->objects_lock );
+     free_debug_utils_messengers( &instance->utils_messengers );
+     free_debug_report_callbacks( &instance->report_callbacks );
++    pthread_key_delete(instance->obj.transient_object_handle);
+     free( instance );
+ }
+ 
+@@ -1033,6 +1036,17 @@ static void win32u_vkGetDeviceQueue2( VkDevice client_device, const VkDeviceQueu
+     *client_queue = device_find_queue( client_device, &info );
+ }
+ 
++static void set_transient_client_handle(struct vulkan_instance *instance, uint64_t client_handle)
++{
++    uint64_t *handle = pthread_getspecific(instance->transient_object_handle);
++    if (!handle)
++    {
++        handle = malloc(sizeof(uint64_t));
++        pthread_setspecific(instance->transient_object_handle, handle);
++    }
++    *handle = client_handle;
++}
++
+ static VkResult win32u_vkAllocateMemory( VkDevice client_device, const VkMemoryAllocateInfo *client_alloc_info,
+                                          const VkAllocationCallbacks *allocator, VkDeviceMemory *ret )
+ {
+@@ -1153,6 +1167,7 @@ static VkResult win32u_vkAllocateMemory( VkDevice client_device, const VkMemoryA
+         alloc_info->pNext = &fd_info;
+     }
+ 
++    set_transient_client_handle(instance, (uintptr_t)&memory->obj.obj);
+     if ((res = device->p_vkAllocateMemory( device->host.device, alloc_info, NULL, &host_device_memory ))) goto failed;
+ 
+     if (export_info)
+diff --git a/dlls/winevulkan/vulkan.c b/dlls/winevulkan/vulkan.c
+index 0f49148ee15..d9d99270a72 100644
+--- a/dlls/winevulkan/vulkan.c
++++ b/dlls/winevulkan/vulkan.c
+@@ -66,6 +66,12 @@ static void append_debug_utils_object(const VkDebugUtilsObjectNameInfoEXT *objec
+     dst->object_name_len = append_string(object->pObjectName, strings, strings_len);
+ }
+ 
++static uint64_t get_transient_handle(struct vulkan_instance *instance)
++{
++    uint64_t *handle = pthread_getspecific(instance->transient_object_handle);
++    return handle && *handle;
++}
++
+ static VkBool32 debug_utils_callback_conversion(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
+     VkDebugUtilsMessageTypeFlagsEXT message_types,
+     const VkDebugUtilsMessengerCallbackDataEXT *callback_data,
+@@ -148,6 +154,8 @@ static VkBool32 debug_utils_callback_conversion(VkDebugUtilsMessageSeverityFlagB
+         if (wine_vk_is_type_wrapped(objects[i].object_type))
+         {
+             objects[i].object_handle = object->instance->p_client_handle_from_host(object->instance, objects[i].object_handle);
++            if (!objects[i].object_handle)
++                objects[i].object_handle = get_transient_handle(object->instance);
+             if (!objects[i].object_handle)
+             {
+                 WARN("handle conversion failed 0x%s\n", wine_dbgstr_longlong(callback_data->pObjects[i].objectHandle));
+diff --git a/include/wine/vulkan_driver.h b/include/wine/vulkan_driver.h
+index fb13546b3f8..1ad27af2ed5 100644
+--- a/include/wine/vulkan_driver.h
++++ b/include/wine/vulkan_driver.h
+@@ -89,6 +89,7 @@ struct VkDevice_T
+ 
+ #ifdef WINE_UNIX_LIB
+ 
++#include <pthread.h>
+ #include "wine/rbtree.h"
+ #include "wine/list.h"
+ 
+@@ -167,6 +168,8 @@ struct vulkan_instance
+ 
+     struct vulkan_physical_device *physical_devices;
+     uint32_t physical_device_count;
++
++    pthread_key_t transient_object_handle;
+ };
+ 
+ static inline struct vulkan_instance *vulkan_instance_from_handle( VkInstance handle )
