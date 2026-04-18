@@ -1,0 +1,141 @@
+diff --git a/dlls/wow64/process.c b/dlls/wow64/process.c
+index 57a5f4f3b35..b20caf06391 100644
+--- a/dlls/wow64/process.c
++++ b/dlls/wow64/process.c
+@@ -701,6 +701,10 @@ NTSTATUS WINAPI wow64_NtQueryInformationProcess( UINT *args )
+         if (retlen) *retlen = sizeof(SECTION_IMAGE_INFORMATION32);
+         return STATUS_INFO_LENGTH_MISMATCH;
+ 
++    case ProcessWineUnixDebuggerPid:
++    case ProcessWineUnixPid:
++        return NtQueryInformationProcess( handle, class, ptr, len, retlen );
++
+     default:
+         FIXME( "unsupported class %u\n", class );
+         return STATUS_INVALID_INFO_CLASS;
+
+diff --git a/dlls/ntdll/unix/process.c b/dlls/ntdll/unix/process.c
+index 040e919cddc..0644d84b748 100644
+--- a/dlls/ntdll/unix/process.c
++++ b/dlls/ntdll/unix/process.c
+@@ -1018,6 +1018,11 @@ void fill_vm_counters( VM_COUNTERS_EX *pvmi, int unix_pid )
+ #endif
+ }
+ 
++int get_unix_debugger_pid(void)
++{
++    return 0;
++}
++
+ #elif defined(linux)
+ 
+ void fill_vm_counters( VM_COUNTERS_EX *pvmi, int unix_pid )
+@@ -1053,6 +1058,23 @@ void fill_vm_counters( VM_COUNTERS_EX *pvmi, int unix_pid )
+     fclose(f);
+ }
+ 
++int get_unix_debugger_pid(void)
++{
++    int unix_pid = 0;
++    char line[256];
++    FILE *file;
++
++    if (!(file = fopen( "/proc/self/status", "r" ))) return 0;
++    while (fgets( line, sizeof(line), file ))
++    {
++        if (sscanf( line, "TracerPid: %d", &unix_pid )) break;
++        unix_pid = 0;
++    }
++    fclose( file );
++
++    return unix_pid;
++}
++
+ #elif defined(HAVE_LIBPROCSTAT)
+ 
+ void fill_vm_counters( VM_COUNTERS_EX *pvmi, int unix_pid )
+@@ -1077,6 +1099,11 @@ void fill_vm_counters( VM_COUNTERS_EX *pvmi, int unix_pid )
+     }
+ }
+ 
++int get_unix_debugger_pid(void)
++{
++    return 0;
++}
++
+ #else
+ 
+ void fill_vm_counters( VM_COUNTERS_EX *pvmi, int unix_pid )
+@@ -1084,6 +1111,11 @@ void fill_vm_counters( VM_COUNTERS_EX *pvmi, int unix_pid )
+     /* FIXME : real data */
+ }
+ 
++int get_unix_debugger_pid(void)
++{
++    return 0;
++}
++
+ #endif
+ 
+ #define UNIMPLEMENTED_INFO_CLASS(c) \
+     case ProcessQuotaLimits:
+         {
+             QUOTA_LIMITS qlimits;
+@@ -1122,6 +1122,25 @@ int get_unix_debugger_pid(void)
+ 
+ #endif
+ 
++static NTSTATUS get_unix_pid( HANDLE process, int *pid )
++{
++    NTSTATUS status;
++    HANDLE thread;
++
++    if ((status = NtGetNextThread( process, NULL, THREAD_QUERY_LIMITED_INFORMATION, 0, 0, &thread ))) return status;
++
++    SERVER_START_REQ( get_thread_times )
++    {
++        req->handle = wine_server_obj_handle( thread );
++        status = wine_server_call( req );
++        if (!status) *pid = reply->unix_pid;
++    }
++    SERVER_END_REQ;
++
++    NtClose( thread );
++    return status;
++}
++
+ static BOOL set_hardware_tso( BOOL enable ) {
+ #ifdef HAVE_PRCTL
+ #ifndef PR_GET_MEM_MODEL
+@@ -1644,6 +1669,17 @@ NTSTATUS WINAPI NtQueryInformationProcess( HANDLE handle, PROCESSINFOCLASS class
+         else ret = STATUS_INFO_LENGTH_MISMATCH;
+         break;
+ 
++    case ProcessWineUnixDebuggerPid:
++        if (handle != NtCurrentProcess()) ret = STATUS_INVALID_PARAMETER;
++        else if (size != sizeof(int)) ret = STATUS_INFO_LENGTH_MISMATCH;
++        else *(int *)info = get_unix_debugger_pid();
++        break;
++
++    case ProcessWineUnixPid:
++        if (size != sizeof(int)) ret = STATUS_INFO_LENGTH_MISMATCH;
++        else ret = get_unix_pid( handle, (int *)info );
++        break;
++
+     case ProcessQuotaLimits:
+         {
+             QUOTA_LIMITS qlimits;
+diff --git a/include/winternl.h b/include/winternl.h
+index bc53bf8628d..de65451874e 100644
+--- a/include/winternl.h
++++ b/include/winternl.h
+@@ -2033,6 +2034,8 @@ typedef enum _PROCESSINFOCLASS {
+ #ifdef __WINESRC__
+     ProcessWineMakeProcessSystem = 1000,
+     ProcessWineGrantAdminToken = 1002,
++    ProcessWineUnixDebuggerPid = 1100,
++    ProcessWineUnixPid = 1101,
+ #endif
+ } PROCESSINFOCLASS;
+ 
+ #define MEM_EXECUTE_OPTION_DISABLE   0x01
