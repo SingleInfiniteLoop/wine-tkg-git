@@ -1,0 +1,192 @@
+diff --git a/dlls/ntdll/env.c b/dlls/ntdll/env.c
+index 5ba68a13d77..99e86b1c7ac 100644
+--- a/dlls/ntdll/env.c
++++ b/dlls/ntdll/env.c
+@@ -730,3 +730,31 @@ void init_user_process_params(void)
+     set_wow64_environment( &new_params->Environment );
+     new_params->EnvironmentSize = RtlSizeHeap( GetProcessHeap(), 0, new_params->Environment );
+ }
++
++
++/**********************************************************************
++ *      __wine_get_unix_env
++ */
++NTSTATUS WINAPI __wine_get_unix_env( const char *var, char *val, unsigned int buffer_len )
++{
++    struct wine_get_unix_env_params params =
++    {
++        .name = var, .val = val, .buffer_len = buffer_len,
++    };
++
++    return WINE_UNIX_CALL( unix___wine_get_unix_env, &params );
++}
++
++
++/**********************************************************************
++ *      __wine_set_unix_env
++ */
++NTSTATUS WINAPI __wine_set_unix_env( const char *var, const char *val )
++{
++    struct wine_set_unix_env_params params =
++    {
++        .name = var, .val = val
++    };
++
++    return WINE_UNIX_CALL( unix___wine_set_unix_env, &params );
++}
+diff --git a/dlls/ntdll/ntdll.spec b/dlls/ntdll/ntdll.spec
+index 46cd1dccab5..abdcaef5f8c 100644
+--- a/dlls/ntdll/ntdll.spec
++++ b/dlls/ntdll/ntdll.spec
+@@ -1753,6 +1753,8 @@
+ @ extern -private __wine_unix_call_dispatcher
+ @ extern -private -arch=arm64ec __wine_unix_call_dispatcher_arm64ec
+ @ extern -private __wine_unixlib_handle
++@ stdcall __wine_get_unix_env(ptr ptr long)
++@ stdcall __wine_set_unix_env(ptr ptr)
+ 
+ # Debugging
+ @ stdcall -norelay __wine_dbg_write(ptr long)
+diff --git a/dlls/ntdll/unix/loader.c b/dlls/ntdll/unix/loader.c
+index 27f714cc221..f908e9ea326 100644
+--- a/dlls/ntdll/unix/loader.c
++++ b/dlls/ntdll/unix/loader.c
+@@ -1165,6 +1165,35 @@ static void init_paths(void)
+     set_config_dir();
+ }
+ 
++
++/**********************************************************************
++ *      __wine_get_unix_env
++ */
++NTSTATUS WINAPI wine_get_unix_env( void *args )
++{
++    struct wine_get_unix_env_params *params = args;
++    unsigned int len;
++    char *s;
++
++    if (!(s = getenv( params->name ))) return STATUS_VARIABLE_NOT_FOUND;
++    len = strlen( s ) + 1;
++    if (len > params->buffer_len) return STATUS_BUFFER_TOO_SMALL;
++    memcpy( params->val, s, len );
++    return STATUS_SUCCESS;
++}
++
++/**********************************************************************
++ *      __wine_set_unix_env
++ */
++NTSTATUS WINAPI wine_set_unix_env( void *args )
++{
++    struct wine_set_unix_env_params *params = args;
++
++    if (!params->val) unsetenv( params->name );
++    else setenv( params->name, params->val, 1 );
++    return 0;
++}
++
+ 
+ /***********************************************************************
+  *           get_alternate_wineloader
+@@ -1291,6 +1320,8 @@ static const unixlib_entry_t unix_call_funcs[] =
+     unixcall_wine_server_handle_to_fd,
+     unixcall_wine_spawnvp,
+     system_time_precise,
++    wine_get_unix_env,
++    wine_set_unix_env,
+ };
+ 
+ 
+@@ -1300,6 +1331,38 @@ static const unixlib_entry_t unix_call_funcs[] =
+ static NTSTATUS wow64_load_so_dll( void *args ) { return STATUS_INVALID_IMAGE_FORMAT; }
+ static NTSTATUS wow64_unwind_builtin_dll( void *args ) { return STATUS_UNSUCCESSFUL; }
+ 
++static NTSTATUS wow64___wine_get_unix_env( void *args )
++{
++    struct
++    {
++        ULONG name;
++        ULONG val;
++        unsigned int buffer_len;
++    } const *params32 = args;
++    struct wine_get_unix_env_params params =
++    {
++        .name = ULongToPtr( params32->name ),
++        .val = ULongToPtr( params32->val ),
++        .buffer_len = params32->buffer_len,
++    };
++    return wine_get_unix_env( &params );
++}
++
++static NTSTATUS wow64___wine_set_unix_env( void *args )
++{
++    struct
++    {
++        ULONG name;
++        ULONG val;
++    } const *params32 = args;
++    struct wine_set_unix_env_params params =
++    {
++        .name = ULongToPtr( params32->name ),
++        .val = ULongToPtr( params32->val ),
++    };
++    return wine_set_unix_env( &params );
++}
++
+ const unixlib_entry_t unix_call_wow64_funcs[] =
+ {
+     wow64_load_so_dll,
+@@ -1323,6 +1386,8 @@ const unixlib_entry_t unix_call_wow64_funcs[] =
+     wow64_wine_server_handle_to_fd,
+     wow64_wine_spawnvp,
+     system_time_precise,
++    wow64___wine_get_unix_env,
++    wow64___wine_set_unix_env,
+ };
+ 
+ #endif  /* _WIN64 */
+diff --git a/dlls/ntdll/unixlib.h b/dlls/ntdll/unixlib.h
+index 475e532b8cf..6011586f499 100644
+--- a/dlls/ntdll/unixlib.h
++++ b/dlls/ntdll/unixlib.h
+@@ -66,6 +66,19 @@ struct unwind_builtin_dll_params
+     CONTEXT                    *context;
+ };
+ 
++struct wine_get_unix_env_params
++{
++    const char *name;
++    char *val;
++    unsigned int buffer_len;
++};
++
++struct wine_set_unix_env_params
++{
++    const char *name;
++    const char *val;
++};
++
+ enum ntdll_unix_funcs
+ {
+     unix_load_so_dll,
+@@ -82,6 +95,8 @@ enum ntdll_unix_funcs
+     unix_wine_server_handle_to_fd,
+     unix_wine_spawnvp,
+     unix_system_time_precise,
++    unix___wine_get_unix_env,
++    unix___wine_set_unix_env,
+ };
+ 
+ extern unixlib_handle_t __wine_unixlib_handle;
+diff --git a/include/winternl.h b/include/winternl.h
+index 80c295f0dce..fdbd29b382e 100644
+--- a/include/winternl.h
++++ b/include/winternl.h
+@@ -5338,6 +5338,8 @@ NTSYSAPI LONGLONG  WINAPI RtlLargeIntegerSubtract(LONGLONG,LONGLONG);
+ 
+ NTSYSAPI NTSTATUS WINAPI wine_nt_to_unix_file_name( const OBJECT_ATTRIBUTES *attr, char *nameA, ULONG *size,
+                                                     UINT disposition );
++NTSYSAPI NTSTATUS WINAPI __wine_get_unix_env( const char *var, char *val, unsigned int buffer_len );
++NTSYSAPI NTSTATUS WINAPI __wine_set_unix_env( const char *var, const char *val );
+ 
+ 
+ /***********************************************************************
