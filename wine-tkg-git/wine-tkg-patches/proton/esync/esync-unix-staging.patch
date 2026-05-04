@@ -888,7 +888,7 @@ index aa120ae38ec..fdda50575d1 100644
  #include "wine/debug.h"
  
 @@ -1790,6 +1791,7 @@ static void start_main_thread(void)
-     signal_init_threading();
+ 
      dbg_init();
      startup_info_size = server_init_process();
 +    esync_init();
@@ -5079,7 +5079,7 @@ index f805af251bb..a80019b76dd 100644
      int i, j, ret;
  
 +    /* Grab the APC fd if we don't already have it. */
-+    if (alertable && ntdll_get_thread_data()->esync_apc_fd == -1)
++    if (alertable && get_thread_data()->esync_apc_fd == -1)
 +    {
 +        obj_handle_t fd_handle;
 +        sigset_t sigset;
@@ -5097,7 +5097,7 @@ index f805af251bb..a80019b76dd 100644
 +        SERVER_END_REQ;
 +        server_leave_uninterrupted_section( &fd_cache_mutex, &sigset );
 +
-+        ntdll_get_thread_data()->esync_apc_fd = fd;
++        get_thread_data()->esync_apc_fd = fd;
 +    }
 +
      NtQuerySystemTime( &now );
@@ -5118,7 +5118,7 @@ index f805af251bb..a80019b76dd 100644
          }
 +        if (alertable)
 +        {
-+            fds[i].fd = ntdll_get_thread_data()->esync_apc_fd;
++            fds[i].fd = get_thread_data()->esync_apc_fd;
 +            fds[i].events = POLLIN;
 +            i++;
 +        }
@@ -5149,7 +5149,7 @@ index f805af251bb..a80019b76dd 100644
 +            if (alertable)
 +            {
 +                /* We also need to wait on APCs. */
-+                fds[1].fd = ntdll_get_thread_data()->esync_apc_fd;
++                fds[1].fd = get_thread_data()->esync_apc_fd;
 +                fds[1].events = POLLIN;
 +                pollcount++;
 +            }
@@ -5208,26 +5208,26 @@ diff --git a/dlls/ntdll/unix/unix_private.h b/dlls/ntdll/unix/unix_private.h
 index b9043351d57..283fd7d7ff6 100644
 --- a/dlls/ntdll/unix/unix_private.h
 +++ b/dlls/ntdll/unix/unix_private.h
-@@ -105,6 +105,7 @@ struct ntdll_thread_data
-     SYSTEM_SERVICE_TABLE     *syscall_table; /* 214/0370 syscall table */
-     struct syscall_frame     *syscall_frame; /* 218/0378 current syscall frame */
-     int                       syscall_trace; /* 21c/0380 syscall trace flag */
-+    int                       esync_apc_fd;  /* fd to wait on for user APCs */
-     int                       request_fd;    /* fd for sending server requests */
-     int                       reply_fd;      /* fd for receiving server replies */
-     int                       wait_fd[2];    /* fd for sleeping server requests */
+@@ -105,6 +105,7 @@ static inline BOOL is_arm64ec(void)
+ struct thread_data
+ {
+     TEB         *teb;               /* TEB */
++    int          esync_apc_fd;      /* fd to wait on for user APCs */
+     int          request_fd;        /* fd for sending server requests */
+     int          reply_fd;          /* fd for receiving server replies */
+     int          wait_fd[2];        /* fd for sleeping server requests */
 diff --git a/dlls/ntdll/unix/virtual.c b/dlls/ntdll/unix/virtual.c
 index c797c89952f..0778ad73984 100644
 --- a/dlls/ntdll/unix/virtual.c
 +++ b/dlls/ntdll/unix/virtual.c
-@@ -4014,6 +4014,7 @@ static TEB *init_teb( void *ptr, BOOL is_wow )
-     teb->StaticUnicodeString.Buffer = teb->StaticUnicodeBuffer;
-     teb->StaticUnicodeString.MaximumLength = sizeof(teb->StaticUnicodeBuffer);
-     thread_data = (struct ntdll_thread_data *)&teb->GdiTebBatch;
-+    thread_data->esync_apc_fd = -1;
-     thread_data->request_fd = -1;
-     thread_data->reply_fd   = -1;
-     thread_data->wait_fd[0] = -1;
+@@ -4014,6 +4014,7 @@ struct thread_data *virtual_alloc_thread_data(void)
+     if (!status)
+     {
+         data = view->base;
++        data->esync_apc_fd = -1;
+         data->request_fd = -1;
+         data->reply_fd   = -1;
+         data->wait_fd[0] = -1;
 diff --git a/server/esync.c b/server/esync.c
 index c5587bef6cf..0c365006f0b 100644
 --- a/server/esync.c

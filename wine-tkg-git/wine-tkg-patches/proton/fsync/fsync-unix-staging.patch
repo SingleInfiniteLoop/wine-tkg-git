@@ -722,7 +722,7 @@ index 00000000000..5012425b95a
 +
 +    if (alertable)
 +    {
-+        int *apc_futex = ntdll_get_thread_data()->fsync_apc_futex;
++        int *apc_futex = get_thread_data()->fsync_apc_futex;
 +        struct futex_wait_block futexes[2];
 +
 +        if (__atomic_load_n( apc_futex, __ATOMIC_SEQ_CST ))
@@ -791,7 +791,7 @@ index 00000000000..5012425b95a
 +    int i, ret;
 +
 +    /* Grab the APC futex if we don't already have it. */
-+    if (alertable && !ntdll_get_thread_data()->fsync_apc_futex)
++    if (alertable && !get_thread_data()->fsync_apc_futex)
 +    {
 +        unsigned int idx = 0;
 +        SERVER_START_REQ( get_fsync_apc_idx )
@@ -804,7 +804,7 @@ index 00000000000..5012425b95a
 +        if (idx)
 +        {
 +            struct event *apc_event = get_shm( idx );
-+            ntdll_get_thread_data()->fsync_apc_futex = &apc_event->signaled;
++            get_thread_data()->fsync_apc_futex = &apc_event->signaled;
 +        }
 +    }
 +
@@ -869,7 +869,7 @@ index 00000000000..5012425b95a
 +            {
 +                /* We must check this first! The server may set an event that
 +                 * we're waiting on, but we need to return STATUS_USER_APC. */
-+                if (__atomic_load_n( ntdll_get_thread_data()->fsync_apc_futex, __ATOMIC_SEQ_CST ))
++                if (__atomic_load_n( get_thread_data()->fsync_apc_futex, __ATOMIC_SEQ_CST ))
 +                    goto userapc;
 +            }
 +
@@ -1005,7 +1005,7 @@ index 00000000000..5012425b95a
 +            if (alertable)
 +            {
 +                /* We already checked if it was signaled; don't bother doing it again. */
-+                futexes[i].addr = ntdll_get_thread_data()->fsync_apc_futex;
++                futexes[i].addr = get_thread_data()->fsync_apc_futex;
 +                futexes[i].val = 0;
 +#if __SIZEOF_POINTER__ == 4
 +                futexes[i].pad = 0;
@@ -1395,7 +1395,7 @@ index 19b73256ef2..d0d979248f8 100644
  #include "wine/debug.h"
  
 @@ -1565,6 +1566,7 @@ static void start_main_thread(void)
-     signal_init_threading();
+ 
      dbg_init();
      startup_info_size = server_init_process();
 +    fsync_init();
@@ -1632,26 +1632,26 @@ diff --git a/dlls/ntdll/unix/unix_private.h b/dlls/ntdll/unix/unix_private.h
 index e7033932bcb..a2f485d892f 100644
 --- a/dlls/ntdll/unix/unix_private.h
 +++ b/dlls/ntdll/unix/unix_private.h
-@@ -59,6 +59,7 @@ struct ntdll_thread_data
-     struct syscall_frame     *syscall_frame; /* 218/0378 current syscall frame */
-     int                       syscall_trace; /* 21c/0380 syscall trace flag */
-     int                       esync_apc_fd;  /* fd to wait on for user APCs */
-+    int                      *fsync_apc_futex;
-     int                       request_fd;    /* fd for sending server requests */
-     int                       reply_fd;      /* fd for receiving server replies */
-     int                       wait_fd[2];    /* fd for sleeping server requests */
+@@ -59,6 +59,7 @@ struct thread_data
+ {
+     TEB         *teb;               /* TEB */
+     int          esync_apc_fd;      /* fd to wait on for user APCs */
++    int         *fsync_apc_futex;
+     int          request_fd;        /* fd for sending server requests */
+     int          reply_fd;          /* fd for receiving server replies */
+     int          wait_fd[2];        /* fd for sleeping server requests */
 diff --git a/dlls/ntdll/unix/virtual.c b/dlls/ntdll/unix/virtual.c
 index bd89649e769..608c83b579c 100644
 --- a/dlls/ntdll/unix/virtual.c
 +++ b/dlls/ntdll/unix/virtual.c
-@@ -2683,6 +2683,7 @@ static void init_teb( TEB *teb, PEB *peb )
-     teb->StaticUnicodeString.MaximumLength = sizeof(teb->StaticUnicodeBuffer);
-     thread_data = (struct ntdll_thread_data *)&teb->GdiTebBatch;
-     thread_data->esync_apc_fd = -1;
-+    thread_data->fsync_apc_futex = NULL;
-     thread_data->request_fd = -1;
-     thread_data->reply_fd   = -1;
-     thread_data->wait_fd[0] = -1;
+@@ -2683,6 +2683,7 @@ struct thread_data *virtual_alloc_thread_data(void)
+     {
+         data = view->base;
+         data->esync_apc_fd = -1;
++        data->fsync_apc_futex = NULL;
+         data->request_fd = -1;
+         data->reply_fd   = -1;
+         data->wait_fd[0] = -1;
 diff --git a/server/Makefile.in b/server/Makefile.in
 index 8bd612b4728..6dc5c465e52 100644
 --- a/server/Makefile.in

@@ -497,7 +497,7 @@ index f5ae0a821b0..284e2fcce01 100644
 +
      if (alertable)
      {
-         int *apc_futex = ntdll_get_thread_data()->fsync_apc_futex;
+         int *apc_futex = get_thread_data()->fsync_apc_futex;
 -        struct futex_wait_block futexes[2];
  
          if (__atomic_load_n( apc_futex, __ATOMIC_SEQ_CST ))
@@ -703,14 +703,14 @@ index f5ae0a821b0..284e2fcce01 100644
              if (alertable)
              {
                  /* We already checked if it was signaled; don't bother doing it again. */
--                futexes[i].addr = ntdll_get_thread_data()->fsync_apc_futex;
+-                futexes[i].addr = get_thread_data()->fsync_apc_futex;
 -                futexes[i].val = 0;
 -#if __SIZEOF_POINTER__ == 4
 -                futexes[i].pad = 0;
 -#endif
 -                futexes[i].bitset = ~0;
 -                i++;
-+                futex_vector_set( &futexes[i++], ntdll_get_thread_data()->fsync_apc_futex, 0 );
++                futex_vector_set( &futexes[i++], get_thread_data()->fsync_apc_futex, 0 );
              }
              waitcount = i;
  
@@ -818,7 +818,7 @@ index 0360bc64b00..f30d900a07b 100644
  /***********************************************************************
   *           start_main_thread
 @@ -2041,6 +2041,7 @@ static void start_main_thread(void)
-     signal_init_threading();
+ 
      dbg_init();
      startup_info_size = server_init_process();
 +    hacks_init();
