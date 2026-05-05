@@ -2,11 +2,13 @@ diff --git a/dlls/ntdll/unix/loader.c b/dlls/ntdll/unix/loader.c
 index 81e00dcb03a..6b2fbdd9e05 100644
 --- a/dlls/ntdll/unix/loader.c
 +++ b/dlls/ntdll/unix/loader.c
-@@ -1892,6 +1892,7 @@ static void start_main_thread(void)
+@@ -1892,6 +1892,9 @@ static void start_main_thread(void)
      virtual_map_user_shared_data();
      init_cpu_info();
      init_files();
++#if defined(__x86_64__) || defined(__i386__)
 +    set_thread_teb( teb );
++#endif
      init_startup_info();
      *(ULONG_PTR *)&peb->CloudFileFlags = get_image_address();
      set_load_order_app_name( main_wargv[0] );
@@ -14,7 +16,7 @@ diff --git a/dlls/ntdll/unix/signal_i386.c b/dlls/ntdll/unix/signal_i386.c
 index 7b6f0f1ee8c..a370ddf30a8 100644
 --- a/dlls/ntdll/unix/signal_i386.c
 +++ b/dlls/ntdll/unix/signal_i386.c
-@@ -2358,6 +2358,17 @@ NTSTATUS WINAPI NtSetLdtEntries( ULONG sel1, LDT_ENTRY entry1, ULONG sel2, LDT_E
+@@ -2358,6 +2358,17 @@ NTSTATUS get_thread_ldt_entry( HANDLE handle,
  }
  
  
@@ -30,13 +32,13 @@ index 7b6f0f1ee8c..a370ddf30a8 100644
 +
 +
  /**********************************************************************
-  *             signal_init_threading
+  *		signal_alloc_thread
   */
 diff --git a/dlls/ntdll/unix/signal_x86_64.c b/dlls/ntdll/unix/signal_x86_64.c
 index 033a83b6d23..bf081baffb2 100644
 --- a/dlls/ntdll/unix/signal_x86_64.c
 +++ b/dlls/ntdll/unix/signal_x86_64.c
-@@ -2298,6 +2298,15 @@ NTSTATUS WINAPI NtSetLdtEntries( ULONG sel1, LDT_ENTRY entry1, ULONG sel2, LDT_E
+@@ -2298,6 +2298,15 @@ NTSTATUS get_thread_ldt_entry( HANDLE handle,
  }
  
  
@@ -50,7 +52,7 @@ index 033a83b6d23..bf081baffb2 100644
 +
 +
  /**********************************************************************
-  *             signal_init_threading
+  *		signal_alloc_thread
   */
 diff --git a/dlls/ntdll/unix/unix_private.h b/dlls/ntdll/unix/unix_private.h
 index c40b2a76dbb..73dc5f59ba2 100644

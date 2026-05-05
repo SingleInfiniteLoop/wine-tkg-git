@@ -1,0 +1,165 @@
+From 772dbb60d7f321ffc9e115fb4f0c1c6e7551ee26 Mon Sep 17 00:00:00 2001
+From: Infinite Loop <teardown@inbox.ru>
+Date: Wed, 6 May 2026 14:53:45 +0000
+Subject: [PATCH] Revert "ntdll: Merge signal_init_threading() and
+ signal_init_process()."
+
+This reverts commit 61c633204bf9c22dc2ac0f9521c9409ad0717cf2.
+---
+ dlls/ntdll/unix/loader.c        |  1 +
+ dlls/ntdll/unix/signal_arm.c    |  8 ++++++++
+ dlls/ntdll/unix/signal_arm64.c  |  8 ++++++++
+ dlls/ntdll/unix/signal_i386.c   | 35 ++++++++++++++++++++++-----------
+ dlls/ntdll/unix/signal_x86_64.c | 13 ++++++++++--
+ dlls/ntdll/unix/unix_private.h  |  1 +
+ 6 files changed, 52 insertions(+), 14 deletions(-)
+
+diff --git a/dlls/ntdll/unix/loader.c b/dlls/ntdll/unix/loader.c
+index c1e6b588dcb..8d062ffdda0 100644
+--- a/dlls/ntdll/unix/loader.c
++++ b/dlls/ntdll/unix/loader.c
+@@ -1858,6 +1858,7 @@ static void start_main_thread(void)
+ {
+     TEB *teb = virtual_alloc_first_teb();
+ 
++    signal_init_threading();
+     dbg_init();
+     startup_info_size = server_init_process();
+     hacks_init();
+diff --git a/dlls/ntdll/unix/signal_arm.c b/dlls/ntdll/unix/signal_arm.c
+index 60b34c2d8bd..f28f5775384 100644
+--- a/dlls/ntdll/unix/signal_arm.c
++++ b/dlls/ntdll/unix/signal_arm.c
+@@ -1045,6 +1045,14 @@ NTSTATUS get_thread_ldt_entry( HANDLE handle, THREAD_DESCRIPTOR_INFORMATION *inf
+ }
+ 
+ 
++/**********************************************************************
++ *             signal_init_threading
++ */
++void signal_init_threading(void)
++{
++}
++
++
+ /**********************************************************************
+  *             signal_alloc_thread
+  */
+diff --git a/dlls/ntdll/unix/signal_arm64.c b/dlls/ntdll/unix/signal_arm64.c
+index 536834955b3..6e84973af18 100644
+--- a/dlls/ntdll/unix/signal_arm64.c
++++ b/dlls/ntdll/unix/signal_arm64.c
+@@ -1382,6 +1382,14 @@ NTSTATUS get_thread_ldt_entry( HANDLE handle, THREAD_DESCRIPTOR_INFORMATION *inf
+ }
+ 
+ 
++/**********************************************************************
++ *             signal_init_threading
++ */
++void signal_init_threading(void)
++{
++}
++
++
+ /**********************************************************************
+  *             signal_alloc_thread
+  */
+diff --git a/dlls/ntdll/unix/signal_i386.c b/dlls/ntdll/unix/signal_i386.c
+index e105dd00bb6..e8030dda995 100644
+--- a/dlls/ntdll/unix/signal_i386.c
++++ b/dlls/ntdll/unix/signal_i386.c
+@@ -2326,6 +2326,29 @@ NTSTATUS get_thread_ldt_entry( HANDLE handle, THREAD_DESCRIPTOR_INFORMATION *inf
+ }
+ 
+ 
++/**********************************************************************
++ *             signal_init_threading
++ */
++void signal_init_threading(void)
++{
++#ifdef __linux__
++    /* the preloader may have allocated it already */
++    gdt_fs_sel = get_fs();
++    if (!gdt_fs_sel || !is_gdt_sel( gdt_fs_sel ))
++    {
++        struct modify_ldt_s ldt_info = { -1 };
++
++        ldt_info.seg_32bit = 1;
++        ldt_info.usable = 1;
++        if (set_thread_area( &ldt_info ) >= 0) gdt_fs_sel = (ldt_info.entry_number << 3) | 3;
++        else gdt_fs_sel = 0;
++    }
++#elif defined(__FreeBSD__) || defined (__FreeBSD_kernel__)
++    gdt_fs_sel = GSEL( GUFS_SEL, SEL_UPL );
++#endif
++}
++
++
+ /**********************************************************************
+  *		signal_alloc_thread
+  */
+@@ -2368,18 +2391,6 @@ void signal_init_process(void)
+     frame_size = offsetof( struct syscall_frame, xstate ) + xstate_size;
+     xstate_extended_features = user_shared_data->XState.EnabledFeatures & ~(UINT64)3;
+ 
+-#ifdef __linux__
+-    gdt_fs_sel = get_fs(); /* the preloader may have allocated it already */
+-    if (!gdt_fs_sel || !is_gdt_sel( gdt_fs_sel ))
+-    {
+-        struct modify_ldt_s ldt_info = { .entry_number = -1, .seg_32bit = 1, .usable = 1 };
+-        if (set_thread_area( &ldt_info ) >= 0) gdt_fs_sel = (ldt_info.entry_number << 3) | 3;
+-        else gdt_fs_sel = 0;
+-    }
+-#elif defined(__FreeBSD__) || defined (__FreeBSD_kernel__)
+-    gdt_fs_sel = GSEL( GUFS_SEL, SEL_UPL );
+-#endif
+-
+     /* leave some space if libc is using the LDT for %gs */
+     if (!gdt_fs_sel && !is_gdt_sel( get_gs() )) memset( ldt_bitmap, 0xff, 512 / 8 );
+ 
+diff --git a/dlls/ntdll/unix/signal_x86_64.c b/dlls/ntdll/unix/signal_x86_64.c
+index 50539d54126..68d19680416 100644
+--- a/dlls/ntdll/unix/signal_x86_64.c
++++ b/dlls/ntdll/unix/signal_x86_64.c
+@@ -2669,6 +2669,16 @@ NTSTATUS get_thread_ldt_entry( HANDLE handle, THREAD_DESCRIPTOR_INFORMATION *inf
+ }
+ 
+ 
++/**********************************************************************
++ *             signal_init_threading
++ */
++void signal_init_threading(void)
++{
++    __asm__( "movw %%cs,%0" : "=m" (cs64_sel) );
++    __asm__( "movw %%ss,%0" : "=m" (ds64_sel) );
++}
++
++
+ /**********************************************************************
+  *		signal_alloc_thread
+  */
+@@ -2770,9 +2780,6 @@ void signal_init_process(void)
+     anon_mmap_fixed( ptr, page_size, PROT_READ | PROT_WRITE, 0 );
+     *(void **)ptr = __wine_syscall_dispatcher;
+ 
+-    __asm__( "movw %%cs,%0" : "=m" (cs64_sel) );
+-    __asm__( "movw %%ss,%0" : "=m" (ds64_sel) );
+-
+     if (wow_teb)
+     {
+ #ifdef __linux__
+diff --git a/dlls/ntdll/unix/unix_private.h b/dlls/ntdll/unix/unix_private.h
+index 4188a30acd2..c5fdf59aec4 100644
+--- a/dlls/ntdll/unix/unix_private.h
++++ b/dlls/ntdll/unix/unix_private.h
+@@ -338,6 +338,7 @@ extern void *get_native_context( CONTEXT *context );
+ extern void *get_wow_context( CONTEXT *context );
+ extern BOOL get_thread_times( int unix_pid, int unix_tid, LARGE_INTEGER *kernel_time,
+                               LARGE_INTEGER *user_time );
++extern void signal_init_threading(void);
+ extern NTSTATUS signal_alloc_thread( TEB *teb );
+ extern void signal_free_thread( TEB *teb );
+ extern void signal_init_process(void);
+-- 
+2.43.0
+
