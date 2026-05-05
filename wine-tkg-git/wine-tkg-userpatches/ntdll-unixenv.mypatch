@@ -181,12 +181,12 @@ diff --git a/include/winternl.h b/include/winternl.h
 index 80c295f0dce..fdbd29b382e 100644
 --- a/include/winternl.h
 +++ b/include/winternl.h
-@@ -5338,6 +5338,8 @@ NTSYSAPI LONGLONG  WINAPI RtlLargeIntegerSubtract(LONGLONG,LONGLONG);
+@@ -5338,6 +5338,8 @@ NTSYSAPI HANDLE    WINAPI PsGetCurrentThreadId(void);
  
  NTSYSAPI NTSTATUS WINAPI wine_nt_to_unix_file_name( const OBJECT_ATTRIBUTES *attr, char *nameA, ULONG *size,
                                                      UINT disposition );
 +NTSYSAPI NTSTATUS WINAPI __wine_get_unix_env( const char *var, char *val, unsigned int buffer_len );
 +NTSYSAPI NTSTATUS WINAPI __wine_set_unix_env( const char *var, const char *val );
  
- 
  /***********************************************************************
+  * Inline functions
