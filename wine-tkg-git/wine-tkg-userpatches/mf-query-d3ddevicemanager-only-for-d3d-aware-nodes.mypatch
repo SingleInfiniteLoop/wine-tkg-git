@@ -2,7 +2,7 @@ diff --git a/dlls/mf/topology_loader.c b/dlls/mf/topology_loader.c
 index 73f70e62bc6..7ff8f9f6b71 100644
 --- a/dlls/mf/topology_loader.c
 +++ b/dlls/mf/topology_loader.c
-@@ -714,37 +714,38 @@ static HRESULT topology_loader_connect_d3d_aware_sink(struct topoloader_context
+@@ -714,37 +714,38 @@ static HRESULT topology_loader_connect_d3d_aware_sink(IMFTopology *topology,
      if (FAILED(hr = topology_node_get_object(node, &IID_IMFStreamSink, (void **)&stream_sink)))
          return hr;
  
@@ -36,7 +36,7 @@ index 73f70e62bc6..7ff8f9f6b71 100644
 -            }
 +        if (needs_copier && SUCCEEDED(hr = topology_loader_create_copier(upstream_node, upstream_output, node, 0, &copier)))
 +        {
-+            hr = topology_loader_connect_copier(context, upstream_node, upstream_output, node, 0, copier);
++            hr = topology_loader_connect_copier(topology, upstream_node, upstream_output, node, 0, copier);
 +            IMFTransform_Release(copier);
 +        }
  
@@ -45,7 +45,7 @@ index 73f70e62bc6..7ff8f9f6b71 100644
 +        {
 +            if (SUCCEEDED(hr = stream_sink_get_device_manager(stream_sink, &device_manager)))
              {
--                hr = topology_loader_connect_copier(context, upstream_node, upstream_output, node, 0, copier);
+-                hr = topology_loader_connect_copier(topology, upstream_node, upstream_output, node, 0, copier);
 -                IMFTransform_Release(copier);
 +                hr = topology_node_set_device_manager(upstream_node, device_manager);
 +                IUnknown_Release(device_manager);
