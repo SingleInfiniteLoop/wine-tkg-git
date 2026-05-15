@@ -3320,8 +3320,8 @@ index e7795c21136..ef5b3fbf313 100644
 +        thread->esync_fd = esync_create_fd( 0, 0 );
 +
      set_fd_events( thread->request_fd, POLLIN );  /* start listening to events */
-     add_process_thread( thread->process, thread );
      return thread;
+ 
 @@ -466,6 +471,9 @@ static void destroy_thread( struct object *obj )
      if (thread->token) release_object( thread->token );
      if (thread->alert_sync) release_object( thread->alert_sync );
@@ -5318,7 +5318,7 @@ index 11c36e49ae4..3a771838a98 100644
 +    }
  
      set_fd_events( thread->request_fd, POLLIN );  /* start listening to events */
-     add_process_thread( thread->process, thread );
+     return thread;
 @@ -1384,6 +1388,9 @@ static int queue_apc( struct process *process, struct thread *thread, struct thr
          if (apc->call.type == APC_USER && thread->alert_sync)
              signal_inproc_sync( thread->alert_sync );
