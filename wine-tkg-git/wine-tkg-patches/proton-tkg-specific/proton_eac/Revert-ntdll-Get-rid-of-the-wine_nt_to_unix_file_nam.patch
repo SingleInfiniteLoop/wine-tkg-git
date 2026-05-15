@@ -79,7 +79,7 @@ index 901a4f2ff25..77c8f41b08f 100644
 + * returned, but the unix name is still filled in properly.
 + */
 +NTSTATUS WINAPI wine_nt_to_unix_file_name( const OBJECT_ATTRIBUTES *attr, char *nameA, ULONG *size,
-+                                          UINT disposition )
++                                           UINT disposition )
 +{
 +    char *buffer = NULL;
 +    NTSTATUS status;
@@ -146,7 +146,7 @@ index 44362c612f7..a2cf74625fb 100644
 --- a/include/winternl.h
 +++ b/include/winternl.h
 @@ -5210,6 +5210,11 @@ NTSYSAPI HANDLE    WINAPI PsGetCurrentProcessId(void);
- NTSYSAPI HANDLE    WINAPI PsGetCurrentThreadId(void);
+ NTSYSAPI NTSTATUS  WINAPI PsTerminateSystemThread(NTSTATUS);
  #endif
  
 +/* Wine internal functions */
