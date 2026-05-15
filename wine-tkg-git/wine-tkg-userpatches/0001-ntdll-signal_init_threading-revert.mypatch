@@ -159,7 +159,7 @@ index 4188a30acd2..c5fdf59aec4 100644
 +extern void signal_init_threading(void);
  extern NTSTATUS signal_alloc_thread( TEB *teb );
  extern void signal_free_thread( TEB *teb );
- extern void signal_init_process(void);
+ extern void signal_init_process( TEB *teb );
 -- 
 2.43.0
 

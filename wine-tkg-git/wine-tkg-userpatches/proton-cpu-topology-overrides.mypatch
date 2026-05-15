@@ -68,8 +68,8 @@ index b1d3e863240..7b0c7c32f58 100644
      void *teb;
 +    struct cpu_topology_override *cpu_override = get_cpu_topology_override();
      unsigned int status;
-     int suspend;
      FILE_FS_DEVICE_INFORMATION info;
+     struct thread_data *data = get_thread_data();
 @@ -1750,6 +1751,8 @@ void CDECL server_init_process_done( void *relay )
      /* Signal the parent process to continue */
      SERVER_START_REQ( init_process_done )
@@ -540,7 +540,7 @@ index 0fb3aa0e727..31043c3df33 100644
 +    struct process *process = current->process;
  
      init_thread_context( current );
-     generate_debug_event( current, DbgCreateThreadStateChange, &req->entry );
+     if (!current->is_system) generate_debug_event( current, DbgCreateThreadStateChange, &req->entry );
      set_thread_base_priority( current, current->base_priority );
 -    set_thread_affinity( current, current->affinity );
 +    if (!process->cpu_override.cpu_count)
