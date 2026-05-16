@@ -85,40 +85,40 @@ index aa987a80186..be25b2213d9 100644
      }
  
 +    /* HACK: special logic for easyanticheat bridge: only load the bridge (builtin) if there exists a native version of the library next to the windows version */
-+    basename = get_basename((WCHAR *)path);
++    basename = get_basename( (WCHAR *)path );
 +    if (!wcsicmp(basename, easyanticheat_x86W) || !wcsicmp(basename, easyanticheat_x64W) || !wcsicmp(basename, easyanticheatW))
 +    {
-+        UNICODE_STRING eac_unix_name;
++        UNICODE_STRING eac_unix_name, out_nt_name;
 +        OBJECT_ATTRIBUTES attr;
 +        NTSTATUS status;
-+        ULONG size = 256;
-+        char *buffer;
++        char *unix_path = NULL;
 +
 +        len = wcslen(nt_name->Buffer);
 +        eac_unix_name.Buffer = malloc( (len + 5) * sizeof(WCHAR) );
 +        wcscpy(eac_unix_name.Buffer, nt_name->Buffer);
 +
-+        basename = get_basename(eac_unix_name.Buffer);
++        basename = get_basename( eac_unix_name.Buffer );
 +        if (!wcsicmp(basename, easyanticheatW))
 +            wcscpy(basename, easyanticheat_x64W);
 +        wcscpy(&basename[18], soW);
 +        eac_unix_name.Length = eac_unix_name.MaximumLength = wcslen(eac_unix_name.Buffer) * sizeof(WCHAR);
++        InitializeObjectAttributes( &attr, &eac_unix_name, 0, NULL, NULL );
 +
-+        if (!(status = wine_nt_to_unix_file_name(&attr, buffer, &size, FILE_OPEN)))
++        status = get_nt_and_unix_names( &attr, &out_nt_name, &unix_path, FILE_OPEN, FALSE );
++        free( out_nt_name.Buffer );
++        free( unix_path );
++        if (!status)
 +        {
-+            free(buffer);
-+            free(eac_unix_name.Buffer);
 +            ret = LO_BUILTIN;
 +            TRACE( "got hardcoded %s for %s, as the eac unix library is present\n", debugstr_loadorder(ret), debugstr_w(path) );
-+            return ret;
 +        }
 +        else
 +        {
 +            ret = LO_NATIVE;
 +            TRACE( "got hardcoded %s for %s, as the eac unix library (%s) is not present. status %x\n", debugstr_loadorder(ret), debugstr_w(path), debugstr_w(eac_unix_name.Buffer), status );
-+            free(eac_unix_name.Buffer);
-+            return ret;
 +        }
++        free( eac_unix_name.Buffer );
++        return ret;
 +    }
 +
      if (!(module = malloc( (len + 2) * sizeof(WCHAR) ))) return ret;
@@ -262,8 +262,8 @@ index 3d9575d83f2..a13d54ec263 100644
  
  
 @@ -405,6 +419,13 @@ enum loadorder get_load_order( const UNICODE_STRING *nt_name, void *version_res, ULONG version_len )
-         ULONG size = 256;
-         char *buffer;
+         NTSTATUS status;
+         char *unix_path = NULL;
  
 +        if (eac_launcher_process)
 +        {
