@@ -1106,15 +1106,25 @@ index 4a2c3a84b6f..6d8a81e7f4f 100644
  #ifndef _WIN64
  
 @@ -3026,6 +3087,9 @@ BOOL get_redirect( OBJECT_ATTRIBUTES *attr, UNICODE_STRING *redir )
-     const WCHAR *name = attr->ObjectName->Buffer;
      unsigned int i, prefix_len = 0, len = attr->ObjectName->Length / sizeof(WCHAR);
+     TEB64 *teb64 = get_teb64( NtCurrentTeb() );
  
 +    /* CW-Bug-Id: #23185 Emulate Steam Input native hooks for native SDL */
 +    if (replace_steam_input_path( attr, redir )) return;
 +
-     if (!NtCurrentTeb64()) return;
+     if (!teb64) return;
  
      if (!attr->RootDirectory)
+@@ -4580,6 +4644,9 @@ BOOL get_redirect( OBJECT_ATTRIBUTES *attr, UNICODE_STRING *redir )
+     {
+ #ifndef _WIN64
+         get_redirect( attr, nt_name );
++#else
++        /* CW-Bug-Id: #23185 Emulate Steam Input native hooks for native SDL */
++        replace_steam_input_path( attr, nt_name );
+ #endif
+         status = nt_to_unix_file_name( attr, nt_name, unix_name_ret, disposition, open_reparse );
+     }
 -- 
 2.51.0
 
