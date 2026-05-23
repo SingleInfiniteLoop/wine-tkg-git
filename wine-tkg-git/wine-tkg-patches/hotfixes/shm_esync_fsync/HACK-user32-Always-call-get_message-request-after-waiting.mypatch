@@ -24,7 +24,7 @@ index 11111111111..11111111111 100644
      LRESULT result;
      HWND hwnd = filter->hwnd;
 @@ -2734,7 +2734,8 @@ int peek_message( MSG *msg, const struct peek_message_filter *filter )
-         thread_info->client_info.msg_source = prev_source;
+ 
          wake_mask = filter->mask & (QS_SENDMESSAGE | QS_SMRESULT);
  
 -        if (check_queue_bits( wake_mask, filter->mask, wake_mask | signal_bits, filter->mask | clear_bits,
