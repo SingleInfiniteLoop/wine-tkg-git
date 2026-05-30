@@ -21,7 +21,7 @@
 +
 +    if (flags)
 +    {
-+        FIXME("flags %u not implemented\n", flags);
++        FIXME("flags %lu not implemented\n", flags);
 +    }
 +    if (res_id_size <= 3)
 +    {
@@ -63,7 +63,7 @@
 +        {
 +            if (ptr)
 +            {
-+                *ptr = rsrc;
++                *ptr = (LPVOID)rsrc;
 +                if (size)
 +                {
 +                    *size = sizeof(IMAGE_RESOURCE_DATA_ENTRY);
