@@ -35,8 +35,8 @@ index 7e644a6dd9f..53c5c5e82a4 100644
  static UINT64 xstate_extended_features;
 -static LONG syscall_dispatch_enabled = TRUE;
  
- #if defined(__linux__) || defined(__APPLE__)
  static inline struct thread_data *get_current_thread_data(void)
+ {
 @@ -2710,15 +2709,6 @@ static void sigsys_handler( int signal, siginfo_t *siginfo, void *sigcontext )
  
      TRACE_(seh)("SIGSYS, rax %#lx, rip %#lx.\n", (long)RAX_sig(sigcontext), (long)RIP_sig(sigcontext));
