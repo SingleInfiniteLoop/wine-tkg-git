@@ -63,6 +63,7 @@ index 28f57e93bce..17450134e82 100644
  }
  
 -static void controller_destroy(struct xinput_controller *controller, BOOL already_removed);
++/* disable an opened controller, xinput_cs must be held */
 +static void controller_disable(struct xinput_controller *controller)
 +{
 +    XINPUT_VIBRATION state = {0};
@@ -71,20 +72,21 @@ index 28f57e93bce..17450134e82 100644
 +    if (controller->caps.Flags & XINPUT_CAPS_FFB_SUPPORTED) HID_set_state(controller, &state);
 +    controller->enabled = FALSE;
 +
-+    CancelIoEx(controller->device, &controller->hid.read_ovl);
-+    WaitForSingleObject(controller->hid.read_ovl.hEvent, INFINITE);
++    if (CancelIoEx(controller->device, &controller->hid.read_ovl))
++        WaitForSingleObject(controller->hid.read_ovl.hEvent, INFINITE);
 +    SetEvent(update_event);
 +}
 +
++/* close a possibly opened controller, xinput_cs must be held */
 +static void controller_destroy(struct xinput_controller *controller, BOOL already_removed)
 +{
-+    EnterCriticalSection(&controller->crit);
++    set_current_state(controller - controllers, NULL);
 +
 +    if (controller->device)
 +    {
-+        TRACE("removing device %s from index %Iu\n", debugstr_w(controller->device_path), controller - controllers);
++        if (already_removed) controller->enabled = FALSE;
++        else controller_disable(controller);
 +
-+        if (!already_removed) controller_disable(controller);
 +        CloseHandle(controller->device);
 +        controller->device = NULL;
 +
@@ -94,16 +96,15 @@ index 28f57e93bce..17450134e82 100644
 +        HidD_FreePreparsedData(controller->hid.preparsed);
 +        memset(&controller->hid, 0, sizeof(controller->hid));
 +    }
-+
-+    LeaveCriticalSection(&controller->crit);
 +}
  
- static void controller_enable(struct xinput_controller *controller)
- {
-@@ -357,19 +390,6 @@ static void controller_enable(struct xinput_controller *controller)
-     else SetEvent(update_event);
+ /* enable an opened controller, xinput_cs must be held */
+ static BOOL controller_enable(struct xinput_controller *controller)
+@@ -357,20 +390,6 @@ static BOOL controller_enable(struct xinput_controller *controller)
+     return TRUE;
  }
  
+-/* disable an opened controller, xinput_cs must be held */
 -static void controller_disable(struct xinput_controller *controller)
 -{
 -    XINPUT_VIBRATION state = {0};
@@ -112,25 +113,28 @@ index 28f57e93bce..17450134e82 100644
 -    if (controller->caps.Flags & XINPUT_CAPS_FFB_SUPPORTED) HID_set_state(controller, &state);
 -    controller->enabled = FALSE;
 -
--    CancelIoEx(controller->device, &controller->hid.read_ovl);
--    WaitForSingleObject(controller->hid.read_ovl.hEvent, INFINITE);
+-    if (CancelIoEx(controller->device, &controller->hid.read_ovl))
+-        WaitForSingleObject(controller->hid.read_ovl.hEvent, INFINITE);
 -    SetEvent(update_event);
 -}
 -
+ /* opened a new controller device, xinput_cs must be held */
  static BOOL controller_init(struct xinput_controller *controller, PHIDP_PREPARSED_DATA preparsed,
                              HIDP_CAPS *caps, HANDLE device, const WCHAR *device_path)
- {
-@@ -525,26 +545,6 @@ static void update_controller_list(void)
-     SetupDiDestroyDeviceInfoList(set);
+@@ -525,27 +545,6 @@ static void update_controller_list(void)
+     LeaveCriticalSection(&xinput_cs);
  }
  
+-/* close a possibly opened controller, xinput_cs must be held */
 -static void controller_destroy(struct xinput_controller *controller, BOOL already_removed)
 -{
--    EnterCriticalSection(&controller->crit);
+-    set_current_state(controller - controllers, NULL);
 -
 -    if (controller->device)
 -    {
--        if (!already_removed) controller_disable(controller);
+-        if (already_removed) controller->enabled = FALSE;
+-        else controller_disable(controller);
+-
 -        CloseHandle(controller->device);
 -        controller->device = NULL;
 -
@@ -140,8 +144,6 @@ index 28f57e93bce..17450134e82 100644
 -        HidD_FreePreparsedData(controller->hid.preparsed);
 -        memset(&controller->hid, 0, sizeof(controller->hid));
 -    }
--
--    LeaveCriticalSection(&controller->crit);
 -}
 -
  static LONG sign_extend(ULONG value, const HIDP_VALUE_CAPS *caps)
@@ -150,106 +152,6 @@ index 28f57e93bce..17450134e82 100644
 -- 
 2.51.0
 
-From f5721727db673e60434751cda74a86651db018b6 Mon Sep 17 00:00:00 2001
-From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
-Date: Wed, 23 Nov 2022 01:02:13 +0100
-Subject: [PATCH 0083/2018] xinput1_3: Introduce a new open_device_at_index
- helper.
-
-CW-Bug-Id: #20528
----
- dlls/xinput1_3/main.c | 47 ++++++++++++++++++++++++++-----------------
- 1 file changed, 28 insertions(+), 19 deletions(-)
-
-diff --git a/dlls/xinput1_3/main.c b/dlls/xinput1_3/main.c
-index 17450134e82..ffcf05b961d 100644
---- a/dlls/xinput1_3/main.c
-+++ b/dlls/xinput1_3/main.c
-@@ -123,19 +123,6 @@ static HMODULE xinput_instance;
- static HANDLE start_event;
- static HANDLE update_event;
- 
--static BOOL find_opened_device(const WCHAR *device_path, int *free_slot)
--{
--    int i;
--
--    *free_slot = XUSER_MAX_COUNT;
--    for (i = XUSER_MAX_COUNT; i > 0; i--)
--    {
--        if (!controllers[i - 1].device) *free_slot = i - 1;
--        else if (!wcsicmp(device_path, controllers[i - 1].device_path)) return TRUE;
--    }
--    return FALSE;
--}
--
- static void check_value_caps(struct xinput_controller *controller, USHORT usage, HIDP_VALUE_CAPS *caps)
- {
-     switch (usage)
-@@ -473,17 +460,13 @@ static BOOL device_is_overridden(HANDLE device)
-     return disable;
- }
- 
--static BOOL try_add_device(const WCHAR *device_path)
-+static BOOL open_device_at_index(const WCHAR *device_path, int index)
- {
-     SP_DEVICE_INTERFACE_DATA iface = {sizeof(iface)};
-     PHIDP_PREPARSED_DATA preparsed;
-     HIDP_CAPS caps;
-     NTSTATUS status;
-     HANDLE device;
--    int i;
--
--    if (find_opened_device(device_path, &i)) return TRUE; /* already opened */
--    if (i == XUSER_MAX_COUNT) return FALSE; /* no more slots */
- 
-     device = CreateFileW(device_path, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
-                          NULL, OPEN_EXISTING, FILE_FLAG_OVERLAPPED | FILE_FLAG_NO_BUFFERING, NULL);
-@@ -501,16 +484,42 @@ static BOOL try_add_device(const WCHAR *device_path)
-         WARN("ignoring HID device, unsupported usage %04x:%04x\n", caps.UsagePage, caps.Usage);
-     else if (device_is_overridden(device))
-         WARN("ignoring HID device, overridden for dinput\n");
--    else if (!controller_init(&controllers[i], preparsed, &caps, device, device_path))
-+    else if (!controller_init(&controllers[index], preparsed, &caps, device, device_path))
-         WARN("ignoring HID device, failed to initialize\n");
-     else
-+    {
-+        TRACE("opened device %s at index %u\n", debugstr_w(device_path), index);
-         return TRUE;
-+    }
- 
-     CloseHandle(device);
-     HidD_FreePreparsedData(preparsed);
-     return TRUE;
- }
- 
-+static BOOL find_opened_device(const WCHAR *device_path, int *free_slot)
-+{
-+    int i;
-+
-+    *free_slot = XUSER_MAX_COUNT;
-+    for (i = XUSER_MAX_COUNT; i > 0; i--)
-+    {
-+        if (!controllers[i - 1].device) *free_slot = i - 1;
-+        else if (!wcsicmp(device_path, controllers[i - 1].device_path)) return TRUE;
-+    }
-+    return FALSE;
-+}
-+
-+static BOOL try_add_device(const WCHAR *device_path)
-+{
-+    SP_DEVICE_INTERFACE_DATA iface = {sizeof(iface)};
-+    int i;
-+
-+    if (find_opened_device(device_path, &i)) return TRUE; /* already opened */
-+    if (i == XUSER_MAX_COUNT) return FALSE; /* no more slots */
-+    return open_device_at_index(device_path, i);
-+}
-+
- static void try_remove_device(const WCHAR *device_path)
- {
-     int i;
--- 
-2.51.0
 From 065fe6d17f9767dfe272d3aac751ea21c32cda98 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?R=C3=A9mi=20Bernon?= <rbernon@codeweavers.com>
 Date: Sat, 3 Dec 2022 08:03:58 +0100
@@ -933,19 +835,19 @@ diff --git a/dlls/xinput1_3/main.c b/dlls/xinput1_3/main.c
 index 1ccbe834d09..92cd439f6b9 100644
 --- a/dlls/xinput1_3/main.c
 +++ b/dlls/xinput1_3/main.c
-@@ -508,6 +508,17 @@ static BOOL find_opened_device(const WCHAR *device_path, int *free_slot)
-         if (!controllers[i - 1].device) *free_slot = i - 1;
-         else if (!wcsicmp(device_path, controllers[i - 1].device_path)) return TRUE;
+@@ -508,6 +508,17 @@ static BOOL find_opened_device(const WCHAR *device_path, int *slot)
+             return TRUE;
+         }
      }
 +
 +    /* CW-Bug-Id: #23185 Emulate Steam Input native hooks for native SDL */
 +    if ((swscanf(device_path, L"\\\\?\\hid#vid_28de&pid_11ff&xi_%02u#", &i) == 1 ||
 +         swscanf(device_path, L"\\\\?\\HID#VID_28DE&PID_11FF&XI_%02u#", &i) == 1) &&
-+        i < XUSER_MAX_COUNT && *free_slot != i)
++        i < XUSER_MAX_COUNT && *slot != i)
 +    {
 +        controller_destroy(&controllers[i], TRUE);
-+        if (*free_slot != XUSER_MAX_COUNT) open_device_at_index(controllers[i].device_path, *free_slot);
-+        *free_slot = i;
++        if (*slot != XUSER_MAX_COUNT) open_device_at_index(controllers[i].device_path, *slot);
++        *slot = i;
 +    }
 +
      return FALSE;
@@ -959,7 +861,7 @@ index 1ccbe834d09..92cd439f6b9 100644
 +        caps->unk2 = index;
      }
  
-     controller_unlock(&controllers[index]);
+     LeaveCriticalSection(&xinput_cs);
 -- 
 2.51.0
 
@@ -2352,13 +2254,13 @@ index c2ae05a0ce8..eb84f6df830 100644
 --- a/dlls/xinput1_3/main.c
 +++ b/dlls/xinput1_3/main.c
 @@ -54,7 +54,6 @@ WINE_DEFAULT_DEBUG_CHANNEL(xinput);
+ 
  struct xinput_controller
  {
-     CRITICAL_SECTION crit;
 -    XINPUT_CAPABILITIES caps;
-     XINPUT_STATE state;
-     XINPUT_GAMEPAD last_keystroke;
      XINPUT_VIBRATION vibration;
+     HANDLE device;
+     WCHAR device_path[MAX_PATH];
 @@ -198,7 +197,6 @@ static void check_waveform_caps(struct xinput_controller *controller, HANDLE dev
  static BOOL controller_check_caps(struct xinput_controller *controller, HANDLE device, PHIDP_PREPARSED_DATA preparsed)
  {
@@ -2441,16 +2343,16 @@ index c2ae05a0ce8..eb84f6df830 100644
 +    HID_set_state(controller, &state);
      controller->enabled = FALSE;
  
-     CancelIoEx(controller->device, &controller->hid.read_ovl);
-@@ -368,7 +344,7 @@ static void controller_enable(struct xinput_controller *controller)
+     if (CancelIoEx(controller->device, &controller->hid.read_ovl))
+@@ -368,7 +344,7 @@ static BOOL controller_enable(struct xinput_controller *controller)
      BOOL ret;
  
-     if (controller->enabled) return;
+     if (controller->enabled) return TRUE;
 -    if (controller->caps.Flags & XINPUT_CAPS_FFB_SUPPORTED) HID_set_state(controller, &state);
 +    HID_set_state(controller, &state);
-     controller->enabled = TRUE;
  
      memset(&controller->hid.read_ovl, 0, sizeof(controller->hid.read_ovl));
+     controller->hid.read_ovl.hEvent = controller->read_event;
 @@ -1151,6 +1127,10 @@ DWORD WINAPI DECLSPEC_HOTPATCH XInputGetBatteryInformation(DWORD index, BYTE typ
  
  DWORD WINAPI DECLSPEC_HOTPATCH XInputGetCapabilitiesEx(DWORD unk, DWORD index, DWORD flags, XINPUT_CAPABILITIES_EX *caps)
@@ -2463,13 +2365,12 @@ index c2ae05a0ce8..eb84f6df830 100644
      DWORD ret = ERROR_SUCCESS;
  
 @@ -1162,13 +1142,33 @@ DWORD WINAPI DECLSPEC_HOTPATCH XInputGetCapabilitiesEx(DWORD unk, DWORD index, D
- 
-     if (!controller_lock(&controllers[index])) return ERROR_DEVICE_NOT_CONNECTED;
- 
--    if (flags & XINPUT_FLAG_GAMEPAD && controllers[index].caps.SubType != XINPUT_DEVSUBTYPE_GAMEPAD)
+     if (!controllers[index].device) update_controller_list();
+     if (!controllers[index].device)
+         ret = ERROR_DEVICE_NOT_CONNECTED;
+-    else if (flags & XINPUT_FLAG_GAMEPAD && controllers[index].caps.SubType != XINPUT_DEVSUBTYPE_GAMEPAD)
 -        ret = ERROR_DEVICE_NOT_CONNECTED;
--    else if (!HidD_GetAttributes(controllers[index].device, &attr))
-+    if (!HidD_GetAttributes(controllers[index].device, &attr))
+     else if (!HidD_GetAttributes(controllers[index].device, &attr))
          ret = ERROR_DEVICE_NOT_CONNECTED;
      else
      {
@@ -2649,7 +2550,7 @@ index eb84f6df830..906d25d196b 100644
 +        }
      }
  
-     controller_unlock(&controllers[index]);
+     LeaveCriticalSection(&xinput_cs);
 -- 
 2.51.0
 
