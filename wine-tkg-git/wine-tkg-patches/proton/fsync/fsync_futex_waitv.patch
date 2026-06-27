@@ -11,8 +11,8 @@ index 7ea8b1c0ceb..03533857085 100755
 --- a/configure
 +++ b/configure
 @@ -8750,6 +8750,7 @@
- 	link.h \
  	linux/cdrom.h \
+ 	linux/errqueue.h \
  	linux/filter.h \
 +	linux/futex.h \
 	linux/fs.h \
@@ -23,8 +23,8 @@ index 815e40fa08d..0082bd7e4a7 100644
 --- a/configure.ac
 +++ b/configure.ac
 @@ -647,6 +647,7 @@ AC_CHECK_HEADERS(\
- 	link.h \
  	linux/cdrom.h \
+ 	linux/errqueue.h \
  	linux/filter.h \
 +	linux/futex.h \
 	linux/fs.h \
