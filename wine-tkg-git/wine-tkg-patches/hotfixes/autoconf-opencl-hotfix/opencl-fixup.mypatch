@@ -16,15 +16,15 @@ index 2bb09f618c7..9cc74660864 100644
  AC_ARG_WITH(mingw,     AS_HELP_STRING([--without-mingw],[do not use the MinGW cross-compiler]))
  AC_ARG_WITH(netapi,    AS_HELP_STRING([--without-netapi],[do not use the Samba NetAPI library]))
  AC_ARG_WITH(opencl,    AS_HELP_STRING([--without-opencl],[do not use OpenCL]),
--            [if test "x$withval" = "xno"; then ac_cv_header_CL_cl_h=no; ac_cv_header_OpenCL_opencl_h=no; fi])
-+            [if test "x$withval" = "xno"; then ac_cv_header_CL_cl_h=no; ac_cv_header_CL_opencl_h=no; fi])
+-            [if test "x$withval" = "xno"; then ac_cv_header_OpenCL_opencl_h=no; fi])
++            [if test "x$withval" = "xno"; then ac_cv_header_CL_opencl_h=no; fi])
  AC_ARG_WITH(opengl,    AS_HELP_STRING([--without-opengl],[do not use OpenGL]))
  AC_ARG_WITH(oss,       AS_HELP_STRING([--without-oss],[do not use the OSS sound support]))
- AC_ARG_WITH(pcap,      AS_HELP_STRING([--without-pcap],[do not use the Packet Capture library]),
+ AC_ARG_WITH(pcap,      AS_HELP_STRING([--without-pcap],[do not use the Packet Capture library]))
 @@ -430,7 +430,6 @@ AC_CHECK_HEADERS(\
+          [test "$ac_cv_sys_file_offset_bits" = 64 && AC_DEFINE(_TIME_BITS,64,[Define to 64 to enable 64-bit time_t])])
  
  AC_CHECK_HEADERS(\
- 	CL/cl.h \
 -	OpenCL/opencl.h \
  	arpa/inet.h \
  	arpa/nameser.h \
@@ -46,7 +46,7 @@ index 2bb09f618c7..9cc74660864 100644
 +    if test "$ac_cv_header_CL_opencl_h" = "yes"
      then
          AC_SUBST(OPENCL_LIBS,"-framework OpenCL")
-         ac_cv_lib_OpenCL_clGetPlatformInfo=yes
+         ac_cv_func_clGetPlatformInfo=yes
 -- 
 2.38.1
 
