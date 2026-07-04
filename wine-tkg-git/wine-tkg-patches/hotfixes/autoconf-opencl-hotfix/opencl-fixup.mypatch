@@ -28,7 +28,7 @@ index 2bb09f618c7..9cc74660864 100644
 -	OpenCL/opencl.h \
  	arpa/inet.h \
  	arpa/nameser.h \
- 	asm/termbits.h \
+ 	asm/hwcap.h \
 @@ -515,6 +514,8 @@ AC_CHECK_HEADERS(\
  	valgrind/memcheck.h \
  	valgrind/valgrind.h
