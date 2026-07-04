@@ -80,7 +80,7 @@ index 08dad9cb646..b2a49a16177 100644
 +#include "winver.h"
  #include "wincontypes.h"
  #include "winternl.h"
- 
+ #include "processsnapshot.h"
 @@ -486,6 +487,197 @@ BOOL WINAPI DECLSPEC_HOTPATCH CreateProcessInternalA( HANDLE token, const char *
      return ret;
  }
