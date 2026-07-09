@@ -1907,7 +1907,7 @@ index 85c0b79d70e..52a4d9c0e25 100644
      struct hid_expect touch_multiple =
      {
          .code = IOCTL_HID_READ_REPORT,
-@@ -1928,11 +2228,26 @@ static void test_hid_touch_screen(void)
+@@ -1928,12 +2228,27 @@ static void test_hid_touch_screen(void)
          .report_buf = {1,0x02},
      };
  
@@ -1928,6 +1928,7 @@ index 85c0b79d70e..52a4d9c0e25 100644
      RAWINPUTDEVICE rawdevice = {.usUsagePage = HID_USAGE_PAGE_DIGITIZER, .usUsage = HID_USAGE_DIGITIZER_TOUCH_SCREEN};
      UINT rawbuffer_count, rawbuffer_size, expect_flags, id, width, height;
      WCHAR device_path[MAX_PATH];
+     POINTER_INPUT_TYPE type;
      char rawbuffer[1024];
      RAWINPUT *rawinput;
 +    unsigned int i, j;
