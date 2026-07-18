@@ -196,7 +196,7 @@ index 53c5c5e82a4..740df80341f 100644
 @@ -1813,7 +1802,6 @@ __ASM_GLOBAL_FUNC( call_user_mode_callback,
                     "movq 0x98(%r14),%rbp\n\t"  /* prev_frame->rbp */
                     "ldmxcsr 0xd8(%r14)\n\t"    /* prev_frame->xsave.MxCsr */
- #ifdef __linux__
+ #if defined(__linux__) || defined(__FreeBSD__)
 -                   "movb $1,0x340(%r13)\n\t"   /* amd64_thread_data()->syscall_dispatch */
                     "movw 0x338(%r13),%ax\n"    /* amd64_thread_data()->fs */
                     "testw %ax,%ax\n\t"
@@ -276,7 +276,7 @@ index 53c5c5e82a4..740df80341f 100644
 -        WARN_(seh)( "could not enable syscall user dispatch\n" );
  #elif defined (__FreeBSD__) || defined (__FreeBSD_kernel__)
      amd64_set_gsbase( teb );
- #elif defined(__NetBSD__)
+     amd64_get_fsbase( &thread_data->pthread_teb );
 @@ -3160,7 +3115,6 @@ __ASM_GLOBAL_FUNC( __wine_syscall_dispatcher,
                      * (on macOS, signal handlers set gsbase to pthread_teb when on the kernel stack).
                      */
@@ -288,7 +288,7 @@ index 53c5c5e82a4..740df80341f 100644
 @@ -3220,7 +3174,6 @@ __ASM_GLOBAL_FUNC( __wine_syscall_dispatcher,
                     __ASM_CFI_CFA_IS_AT2(rcx, 0xa8, 0x01) /* frame->syscall_cfa */
                     "leaq 0x70(%rcx),%rsp\n\t"      /* %rsp > frame means no longer inside syscall */
- #ifdef __linux__
+ #if defined(__linux__) || defined(__FreeBSD__)
 -                   "movb $1,0x340(%r13)\n\t"       /* amd64_thread_data()->syscall_dispatch */
                     "movw 0x338(%r13),%dx\n"        /* amd64_thread_data()->fs */
                     "testw %dx,%dx\n\t"
@@ -304,7 +304,7 @@ index 53c5c5e82a4..740df80341f 100644
 @@ -3490,7 +3442,6 @@ __ASM_GLOBAL_FUNC( __wine_unix_call_dispatcher,
                     "movq 0x88(%rcx),%rsp\n\t"
                     __ASM_CFI(".cfi_restore_state\n\t")
- #ifdef __linux__
+ #if defined(__linux__) || defined(__FreeBSD__)
 -                   "movb $1,0x340(%r13)\n\t"       /* amd64_thread_data()->syscall_dispatch */
                     "movw 0x338(%r13),%dx\n"        /* amd64_thread_data()->fs */
                     "testw %dx,%dx\n\t"
