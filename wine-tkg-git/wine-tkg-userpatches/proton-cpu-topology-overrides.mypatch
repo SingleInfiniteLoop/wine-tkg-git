@@ -452,7 +452,7 @@ index 97e074a5261..d1f9ab764f7 100644
      if (is_process_init_done(process))
      {
 @@ -1478,6 +1482,9 @@ DECL_HANDLER(init_process_done)
-         process->idle_event = create_event( NULL, NULL, 0, 1, 0, NULL );
+         process->idle_event = create_event( NULL, empty_str, 0, 1, 0, NULL );
      if (process->debug_obj) set_process_debug_flag( process, 1 );
      reply->suspend = (current->suspend || process->suspend);
 +
