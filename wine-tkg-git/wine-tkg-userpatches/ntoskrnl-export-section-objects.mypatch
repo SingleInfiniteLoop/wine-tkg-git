@@ -56,9 +56,9 @@ index 32385662165..e68edf8aba4 100644
      .destroy = mapping_destroy,
  };
  
-@@ -1015,6 +1017,8 @@ static struct mapping *create_mapping( struct object *root, const struct unicode
-     if (get_error() == STATUS_OBJECT_NAME_EXISTS)
-         return mapping;  /* Nothing else to do */
+@@ -1015,6 +1017,8 @@ static struct mapping *create_mapping( struct object_params *params,
+     if (!(mapping = create_named_object( params ))) return NULL;
+     if (get_error() == STATUS_OBJECT_NAME_EXISTS) return mapping;  /* Nothing else to do */
  
 +    list_init( &mapping->kernel_object );
 +
@@ -66,7 +66,7 @@ index 32385662165..e68edf8aba4 100644
      mapping->fd          = NULL;
      mapping->shared      = NULL;
 @@ -1106,6 +1110,8 @@ struct mapping *create_fd_mapping( struct object *root, const struct unicode_str
-     if (!(mapping = create_named_object( root, &mapping_ops, name, attr, sd ))) return NULL;
+     if (!(mapping = create_named_object( &params ))) return NULL;
      if (get_error() == STATUS_OBJECT_NAME_EXISTS) return mapping;  /* Nothing else to do */
  
 +    list_init( &mapping->kernel_object );
