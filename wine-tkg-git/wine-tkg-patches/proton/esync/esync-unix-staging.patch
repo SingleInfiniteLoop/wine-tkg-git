@@ -120,7 +120,7 @@ new file mode 100644
 index 00000000000..35b4833fd4c
 --- /dev/null
 +++ b/server/esync.c
-@@ -0,0 +1,302 @@
+@@ -0,0 +1,298 @@
 +/*
 + * eventfd-based synchronization objects
 + *
@@ -307,14 +307,13 @@ index 00000000000..35b4833fd4c
 +};
 +C_ASSERT(sizeof(struct semaphore) == 8);
 +
-+struct esync *create_esync( struct object *root, const struct unicode_str *name,
-+                            unsigned int attr, int initval, int max, enum esync_type type,
-+                            const struct security_descriptor *sd )
++struct esync *create_esync( struct object_params *params,
++                            int initval, int max, enum esync_type type )
 +{
 +#ifdef HAVE_SYS_EVENTFD_H
 +    struct esync *esync;
 +
-+    if ((esync = create_named_object( root, &esync_ops, name, attr, sd )))
++    if ((esync = create_named_object( params )))
 +    {
 +        if (get_error() != STATUS_OBJECT_NAME_EXISTS)
 +        {
@@ -388,10 +387,7 @@ index 00000000000..35b4833fd4c
 +DECL_HANDLER(create_esync)
 +{
 +    struct esync *esync;
-+    struct unicode_str name;
-+    struct object *root;
-+    const struct security_descriptor *sd;
-+    const struct object_attributes *objattr = get_req_object_attributes( &sd, &name, &root );
++    struct object_params params = { .ops = &esync_ops };
 +
 +    if (!do_esync())
 +    {
@@ -405,15 +401,15 @@ index 00000000000..35b4833fd4c
 +        return;
 +    }
 +
-+    if (!objattr) return;
++    if (!get_req_object_attributes( &params ) || !params.objattr) return;
 +
-+    if ((esync = create_esync( root, &name, objattr->attributes, req->initval, req->max, req->type, sd )))
++    if ((esync = create_esync( &params, req->initval, req->max, req->type )))
 +    {
 +        if (get_error() == STATUS_OBJECT_NAME_EXISTS)
-+            reply->handle = alloc_handle( current->process, esync, req->access, objattr->attributes );
++            reply->handle = alloc_handle( current->process, esync, req->access, params.objattr->attributes );
 +        else
 +            reply->handle = alloc_handle_no_access_check( current->process, esync,
-+                                                          req->access, objattr->attributes );
++                                                          req->access, params.objattr->attributes );
 +
 +        reply->type = esync->type;
 +        reply->shm_idx = esync->shm_idx;
@@ -421,7 +417,7 @@ index 00000000000..35b4833fd4c
 +        release_object( esync );
 +    }
 +
-+    if (root) release_object( root );
++    if (params.root) release_object( params.root );
 +}
 diff --git a/server/esync.h b/server/esync.h
 new file mode 100644
@@ -1451,9 +1447,9 @@ index 75ef586df30..6a63c0dd5e9 100644
 +};
 +C_ASSERT(sizeof(struct event) == 8);
 +
- struct esync *create_esync( struct object *root, const struct unicode_str *name,
-                             unsigned int attr, int initval, int max, enum esync_type type,
-                             const struct security_descriptor *sd )
+ struct esync *create_esync( struct object_params *params,
+                             int initval, int max, enum esync_type type )
+ {
 @@ -256,6 +263,14 @@ struct esync *create_esync( struct object *root, const struct unicode_str *name,
                  semaphore->count = initval;
                  break;
@@ -1707,7 +1703,7 @@ index f95dc5a391f..85f7f1e060f 100644
 +++ b/server/esync.c
 @@ -333,3 +333,40 @@ DECL_HANDLER(create_esync)
  
-     if (root) release_object( root );
+     if (params.root) release_object( params.root );
  }
 +
 +/* Retrieve a file descriptor for an esync object which will be signaled by the
@@ -1784,7 +1780,7 @@ diff --git a/server/esync.c b/server/esync.c
 index 85f7f1e060f..44214e5fe02 100644
 --- a/server/esync.c
 +++ b/server/esync.c
-@@ -295,6 +295,24 @@ struct esync *create_esync( struct object *root, const struct unicode_str *name,
+@@ -295,6 +295,24 @@ struct esync *create_esync( struct object_params *params,
  #endif
  }
  
@@ -2256,17 +2252,17 @@ index c727bfdd1ba..f1a88e3d23f 100644
  struct event
  {
 @@ -161,6 +184,7 @@ static const struct object_ops event_ops =
- 
  static void event_dump( struct object *obj, int verbose );
+ static bool event_init( struct object *obj, const void *init_data );
  static struct object *event_get_sync( struct object *obj );
 +static int event_get_esync_fd( struct object *obj, enum esync_type *type );
  static int event_signal( struct object *obj, unsigned int access, int signal );
  static struct list *event_get_kernel_obj_list( struct object *obj );
  static void event_destroy( struct object *obj );
 @@ -172,6 +196,7 @@ static const struct object_ops event_ops =
-     .size                = sizeof(struct event),
      .type                = &event_type,
      .dump                = event_dump,
+     .init                = event_init,
 +    .get_esync_fd        = event_get_esync_fd,
      .signal              = event_signal,
      .get_sync            = event_get_sync,
@@ -3126,7 +3122,7 @@ index 669afbc70d7..3f1c61bc1f0 100644
  struct event
  {
      int signaled;
-@@ -272,6 +279,13 @@ struct esync *create_esync( struct object *root, const struct unicode_str *name,
+@@ -272,6 +279,13 @@ struct esync *create_esync( struct object_params *params,
                  event->locked = 0;
                  break;
              }
@@ -3870,7 +3866,7 @@ index 3f1c61bc1f0..eca9b6aa67d 100644
 --- a/server/esync.c
 +++ b/server/esync.c
 @@ -410,6 +410,37 @@ DECL_HANDLER(create_esync)
-     if (root) release_object( root );
+     if (params.root) release_object( params.root );
  }
  
 +DECL_HANDLER(open_esync)
@@ -3878,7 +3874,7 @@ index 3f1c61bc1f0..eca9b6aa67d 100644
 +    struct unicode_str name = get_req_unicode_str();
 +
 +    reply->handle = open_object( current->process, req->rootdir, req->access,
-+                                 &esync_ops, &name, req->attributes );
++                                 &esync_ops, name, req->attributes );
 +
 +    /* send over the fd */
 +    if (reply->handle)
@@ -4169,44 +4165,31 @@ index f59902d5607..36645a2a8d2 100644
  
  static const WCHAR timer_name[] = {'T','i','m','e','r'};
  
-@@ -61,9 +62,11 @@ struct timer
+@@ -61,6 +62,7 @@ struct timer
      struct thread       *thread;    /* thread that set the APC function */
      client_ptr_t         callback;  /* callback APC function */
      client_ptr_t         arg;       /* callback argument */
 +    int                  esync_fd;  /* esync file descriptor */
  };
  
+ struct timer_init_data
+@@ -71,6 +72,7 @@ struct timer_init_data
+ 
  static void timer_dump( struct object *obj, int verbose );
+ static bool timer_init( struct object *obj, const void *init_data );
 +static int timer_get_esync_fd( struct object *obj, enum esync_type *type );
  static struct object *timer_get_sync( struct object *obj );
  static void timer_destroy( struct object *obj );
  
 @@ -76,6 +79,7 @@ static const struct object_ops timer_ops =
-     .size     = sizeof(struct timer),
      .type     = &timer_type,
      .dump     = timer_dump,
+     .init     = timer_init,
 +    .get_esync_fd = timer_get_esync_fd,
      .get_sync = timer_get_sync,
      .destroy  = timer_destroy,
  };
-@@ -111,12 +114,16 @@ static struct timer *create_timer( struct object *root, const struct unicode_str
-             timer->period   = 0;
-             timer->timeout  = NULL;
-             timer->thread   = NULL;
-+            timer->esync_fd = -1;
- 
-             if (!(timer->sync = create_internal_sync( manual, 0 )))
-             {
-                 release_object( timer );
-                 return NULL;
-             }
-+
-+            if (do_esync())
-+                timer->esync_fd = esync_create_fd( 0, 0 );
-         }
-     }
-     return timer;
-@@ -183,6 +190,9 @@ static int set_timer( struct timer *timer, timeout_t expire, unsigned int period
+@@ -183,6 +187,9 @@ static int set_timer( struct timer *timer, timeout_t expire, unsigned int period
          period = 0;  /* period doesn't make any sense for a manual timer */
          timer->signaled = 0;
          reset_sync( timer->sync );
@@ -4216,7 +4199,22 @@ index f59902d5607..36645a2a8d2 100644
      }
      timer->when     = (expire <= 0) ? expire - monotonic_time : max( expire, current_time );
      timer->period   = period;
-@@ -209,6 +219,13 @@ static struct object *timer_get_sync( struct object *obj )
+@@ -191,7 +198,13 @@ static bool timer_init( struct object *obj, const void *init_data )
+     timer->period   = 0;
+     timer->timeout  = NULL;
+     timer->thread   = NULL;
+-    return !!(timer->sync = create_internal_sync( data->manual, 0 ));
++    timer->esync_fd = -1;
++    timer->sync = create_internal_sync( data->manual, 0 );
++
++    if (!!timer->sync && do_esync())
++        timer->esync_fd = esync_create_fd( 0, 0 );
++
++    return !!timer->sync;
+ }
+ 
+ static struct object *timer_get_sync( struct object *obj )
+@@ -209,6 +223,13 @@ static struct object *timer_get_sync( struct object *obj )
      return grab_object( timer->sync );
  }
  
@@ -4230,7 +4228,7 @@ index f59902d5607..36645a2a8d2 100644
  static void timer_destroy( struct object *obj )
  {
      struct timer *timer = (struct timer *)obj;
-@@ -223,6 +240,7 @@ static void timer_destroy( struct object *obj )
+@@ -223,6 +244,7 @@ static void timer_destroy( struct object *obj )
      if (timer->timeout) remove_timeout_user( timer->timeout );
      if (timer->thread) release_object( timer->thread );
      if (timer->sync) release_object( timer->sync );
@@ -5496,7 +5494,7 @@ index 0ffe0e2c8dc..b5b1e2a1077 100644
 --- a/server/file.h
 +++ b/server/file.h
 @@ -106,6 +106,7 @@ extern char *dup_fd_name( struct fd *root, const char *name );
- extern void get_nt_name( struct fd *fd, struct unicode_str *name );
+ extern struct unicode_str get_nt_name( struct fd *fd );
  
  extern struct object *default_fd_get_sync( struct object *obj );
 +extern int default_fd_get_esync_fd( struct object *obj, enum esync_type *type );
@@ -6328,7 +6326,7 @@ index 11785d28bab..d79be851c8f 100644
      close( esync->fd );
  }
  
-@@ -305,6 +310,7 @@ struct esync *create_esync( struct object *root, const struct unicode_str *name,
+@@ -305,6 +310,7 @@ struct esync *create_esync( struct object_params *params,
                  struct mutex *mutex = get_shm( esync->shm_idx );
                  mutex->tid = initval ? 0 : current->id;
                  mutex->count = initval ? 0 : 1;
