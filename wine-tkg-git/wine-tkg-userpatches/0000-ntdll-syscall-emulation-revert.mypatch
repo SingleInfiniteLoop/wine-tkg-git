@@ -69,19 +69,30 @@ index 7e644a6dd9f..53c5c5e82a4 100644
  #ifdef __APPLE__
  /**********************************************************************
   *		mac_thread_gsbase
-@@ -2913,11 +2894,8 @@ void signal_init_process(void)
-     }
- 
- #ifdef __linux__
--    if (syscall_dispatch_enabled && !dl_iterate_phdr( libc_addr_cb, NULL ))
--    {
-+    if (!dl_iterate_phdr( libc_addr_cb, NULL ))
-         WARN_(seh)( "could not find libc\n" );
--        syscall_dispatch_enabled = FALSE;
--    }
+@@ -2913,21 +2894,8 @@ void signal_init_process(void)
  #endif
  
-     alloc_syscall_frame( (frame_size + 63) & ~63 );
+ #ifdef __linux__
+-    if (syscall_dispatch_enabled)
+-    {
+-        struct sigaction act;
+-
+-        if (sigaction( SIGSYS, NULL, &act ) == -1)
+-        {
+-            WARN_(seh)( "failed to retrieve signal restorer trampoline\n" );
+-            syscall_dispatch_enabled = FALSE;
+-        }
+-        else if (!dl_iterate_phdr( libc_addr_cb, act.sa_restorer ))
+-        {
+-            WARN_(seh)( "could not find library containing signal restorer trampoline\n" );
+-            syscall_dispatch_enabled = FALSE;
+-        }
+-    }
++    if (!dl_iterate_phdr( libc_addr_cb, NULL ))
++        WARN_(seh)( "could not find libc\n" );
+ #endif
+ 
+     return;
 @@ -2975,8 +2953,8 @@ void init_syscall_frame( LPTHREAD_START_ROUTINE entry, void *arg, BOOL suspend,
          arch_prctl( ARCH_GET_FS, &thread_data->pthread_teb );
          alloc_fs_sel( fs32_sel >> 3, get_wow_teb( teb ));
@@ -216,49 +227,34 @@ index 53c5c5e82a4..740df80341f 100644
   */
  static void sigsys_handler( int signal, siginfo_t *siginfo, void *_sigcontext )
  {
-@@ -2837,29 +2825,6 @@ static void *mac_thread_gsbase(void)
+@@ -2837,26 +2825,6 @@ static void *mac_thread_gsbase(void)
  }
  #endif
  
 -#ifdef __linux__
 -static uintptr_t libc_addr, libc_size;
 -
--static int libc_addr_cb( struct dl_phdr_info *info, size_t size, void *arg )
+-static int libc_addr_cb( struct dl_phdr_info *info, size_t info_size, void *arg )
 -{
--    const char *p;
+-    uintptr_t restorer_addr = (uintptr_t)arg;
+-    uintptr_t size = 0;
 -
--    if ((p = strrchr( info->dlpi_name, '/' )))
--        ++p;
--    else
--        p = info->dlpi_name;
+-    for (unsigned int i = 0; i < info->dlpi_phnum; ++i)
+-        size = max( size, info->dlpi_phdr[i].p_vaddr + info->dlpi_phdr[i].p_memsz );
 -
--    if (strcmp( p, "libc.so.6" ))
+-    if (restorer_addr < info->dlpi_addr || restorer_addr >= info->dlpi_addr + size)
 -        return 0;
 -
 -    libc_addr = info->dlpi_addr;
--    libc_size = 0;
--    for (unsigned int i = 0; i < info->dlpi_phnum; ++i)
--        libc_size = max( libc_size, info->dlpi_phdr[i].p_vaddr + info->dlpi_phdr[i].p_memsz );
--
+-    libc_size = size;
+-    TRACE_(seh)( "found signal trampoline in %s\n", info->dlpi_name);
 -    return 1;
 -}
 -#endif
  
  /**********************************************************************
   *		signal_init_process
-@@ -2893,11 +2858,6 @@ void signal_init_process(void)
- #endif
-     }
- 
--#ifdef __linux__
--    if (!dl_iterate_phdr( libc_addr_cb, NULL ))
--        WARN_(seh)( "could not find libc\n" );
--#endif
--
-     alloc_syscall_frame( (frame_size + 63) & ~63 );
-     signal_alloc_thread( teb );
- 
-@@ -2919,7 +2879,7 @@ void signal_init_process(void)
+@@ -2919,16 +2879,10 @@ void signal_init_process(void)
      if (sigaction( SIGSEGV, &sig_act, NULL ) == -1) goto error;
      if (sigaction( SIGILL, &sig_act, NULL ) == -1) goto error;
      if (sigaction( SIGBUS, &sig_act, NULL ) == -1) goto error;
@@ -267,6 +263,15 @@ index 53c5c5e82a4..740df80341f 100644
      sig_act.sa_sigaction = sigsys_handler;
      if (sigaction( SIGSYS, &sig_act, NULL ) == -1) goto error;
  #endif
+-
+-#ifdef __linux__
+-    if (!dl_iterate_phdr( libc_addr_cb, NULL ))
+-        WARN_(seh)( "could not find libc\n" );
+-#endif
+-
+     return;
+ 
+  error:
 @@ -2952,9 +2912,6 @@ void init_syscall_frame( LPTHREAD_START_ROUTINE entry, void *arg, BOOL suspend,
          arch_prctl( ARCH_GET_FS, &thread_data->pthread_teb );
          alloc_fs_sel( fs32_sel >> 3, get_wow_teb( teb ));
