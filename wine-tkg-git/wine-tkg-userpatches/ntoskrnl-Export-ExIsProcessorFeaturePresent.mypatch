@@ -1,0 +1,13 @@
+diff --git a/dlls/ntoskrnl.exe/ntoskrnl.exe.spec b/dlls/ntoskrnl.exe/ntoskrnl.exe.spec
+index d5d28523b336a454c68663742a8a99ab60b43009..3a9c68974871743decaec788b1ea201425c1034b 100644
+--- a/dlls/ntoskrnl.exe/ntoskrnl.exe.spec
++++ b/dlls/ntoskrnl.exe/ntoskrnl.exe.spec
+@@ -178,7 +178,7 @@
+ @ stub ExInterlockedPopEntryList
+ @ stub ExInterlockedPushEntryList
+ @ stdcall ExInterlockedRemoveHeadList(ptr ptr)
+-@ stub ExIsProcessorFeaturePresent
++@ stdcall ExIsProcessorFeaturePresent(long) RtlIsProcessorFeaturePresent
+ @ stdcall ExIsResourceAcquiredExclusiveLite(ptr)
+ @ stdcall ExIsResourceAcquiredSharedLite(ptr)
+ @ stdcall ExLocalTimeToSystemTime(ptr ptr) RtlLocalTimeToSystemTime
