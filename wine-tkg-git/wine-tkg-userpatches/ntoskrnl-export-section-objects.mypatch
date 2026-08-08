@@ -41,39 +41,30 @@ index 32385662165..e68edf8aba4 100644
      unsigned int         flags;      /* SEC_* flags */
      struct fd           *fd;         /* fd for mapped file */
 @@ -169,6 +170,7 @@ struct mapping
- 
  static void mapping_dump( struct object *obj, int verbose );
+ static bool mapping_init( struct object *obj, const void *init_data );
  static struct fd *mapping_get_fd( struct object *obj );
 +static struct list *mapping_get_kernel_obj_list( struct object *obj );
  static void mapping_destroy( struct object *obj );
  static enum server_fd_type mapping_get_fd_type( struct fd *fd );
  
 @@ -193,6 +195,7 @@ static const struct object_ops mapping_ops =
-     .type    = &mapping_type,
      .dump    = mapping_dump,
+     .init    = mapping_init,
      .get_fd  = mapping_get_fd,
 +    .get_kernel_obj_list = mapping_get_kernel_obj_list,
      .destroy = mapping_destroy,
  };
  
-@@ -1015,6 +1017,8 @@ static struct mapping *create_mapping( struct object_params *params,
-     if (!(mapping = create_named_object( params ))) return NULL;
-     if (get_error() == STATUS_OBJECT_NAME_EXISTS) return mapping;  /* Nothing else to do */
+@@ -1015,6 +1017,8 @@ static bool mapping_init( struct object *obj, const void *init_data )
+     int unix_fd;
+     struct stat st;
  
 +    list_init( &mapping->kernel_object );
 +
-     mapping->size        = size;
+     mapping->size        = data->size;
+     mapping->flags       = data->flags;
      mapping->fd          = NULL;
-     mapping->shared      = NULL;
-@@ -1106,6 +1110,8 @@ struct mapping *create_fd_mapping( struct object *root, const struct unicode_str
-     if (!(mapping = create_named_object( &params ))) return NULL;
-     if (get_error() == STATUS_OBJECT_NAME_EXISTS) return mapping;  /* Nothing else to do */
- 
-+    list_init( &mapping->kernel_object );
-+
-     mapping->shared    = NULL;
-     mapping->committed = NULL;
-     mapping->exp_name  = NULL;
 @@ -1212,6 +1218,12 @@ static struct fd *mapping_get_fd( struct object *obj )
      return (struct fd *)grab_object( mapping->fd );
  }
