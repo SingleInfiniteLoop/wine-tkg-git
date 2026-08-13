@@ -91,9 +91,9 @@ index bf3d6c34f14..fc8165f2828 100644
  #include <sys/time.h>
  #include <time.h>
  #include <dirent.h>
-@@ -236,6 +237,12 @@ struct smbios_boot_info
- static SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX *logical_proc_info_ex;
+@@ -237,6 +238,12 @@ struct smbios_boot_info
  static unsigned int logical_proc_info_ex_size, logical_proc_info_ex_alloc_size;
+ static SYSTEM_NUMA_INFORMATION numa_info;
  static ULONG_PTR system_cpu_mask;
 +static struct
 +{

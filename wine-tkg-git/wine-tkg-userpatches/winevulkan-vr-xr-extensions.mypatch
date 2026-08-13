@@ -120,8 +120,8 @@ index 3c9bc02a997..9b37d57583b 100644
 +    device->extensions.has_VK_WINE_openvr_device_extensions = 0;
 +    device->extensions.has_VK_WINE_openxr_device_extensions = 0;
  
-     if (physical_device->map_placed_align)
-     {
+     /* For Direct3D VA support. */
+     device->extensions.has_VK_EXT_external_memory_dma_buf = physical_device->extensions.has_VK_EXT_external_memory_dma_buf;
 @@ -769,6 +844,7 @@ static VkResult win32u_vkCreateDevice( VkPhysicalDevice client_physical_device,
      struct vulkan_physical_device *physical_device = vulkan_physical_device_from_handle( client_physical_device );
      struct vulkan_instance *instance = physical_device->instance;
