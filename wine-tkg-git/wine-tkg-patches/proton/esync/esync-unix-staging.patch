@@ -726,7 +726,7 @@ index 00000000000..7be4e03fa34
 +    sigset_t sigset;
 +    int fd;
 +
-+    if ((ret = alloc_object_attributes( attr, &objattr, &len ))) return ret;
++    if ((ret = wine_server_alloc_object_attributes( attr, &objattr, &len ))) return ret;
 +
 +    /* We have to synchronize on the fd cache CS so that our calls to
 +     * receive_fd don't race with theirs. */
@@ -888,7 +888,7 @@ index bfbcaf4a851..f21ceb80298 100644
  
 @@ -272,6 +273,9 @@ NTSTATUS WINAPI NtCreateSemaphore( HANDLE *handle, ACCESS_MASK access, const OBJ
      if (max <= 0 || initial < 0 || initial > max) return STATUS_INVALID_PARAMETER;
-     if ((ret = alloc_object_attributes( attr, &objattr, &len ))) return ret;
+     if ((ret = wine_server_alloc_object_attributes( attr, &objattr, &len ))) return ret;
  
 +    if (do_esync())
 +        return esync_create_semaphore( handle, access, attr, initial, max );
@@ -1429,7 +1429,7 @@ index 79141999e33..161c170f59c 100644
 +    if (do_esync())
 +        return esync_create_event( handle, access, attr, type, state );
 +
-     if ((ret = alloc_object_attributes( attr, &objattr, &len ))) return ret;
+     if ((ret = wine_server_alloc_object_attributes( attr, &objattr, &len ))) return ret;
  
      SERVER_START_REQ( create_event )
 diff --git a/server/esync.c b/server/esync.c
@@ -3101,7 +3101,7 @@ index fdf4215039b..1bf4a381a8f 100644
 +    if (do_esync())
 +        return esync_create_mutex( handle, access, attr, owned );
 +
-     if ((ret = alloc_object_attributes( attr, &objattr, &len ))) return ret;
+     if ((ret = wine_server_alloc_object_attributes( attr, &objattr, &len ))) return ret;
  
      SERVER_START_REQ( create_mutex )
 diff --git a/server/esync.c b/server/esync.c
