@@ -1,0 +1,127 @@
+diff --git a/dlls/ntoskrnl.exe/ntoskrnl.exe.spec b/dlls/ntoskrnl.exe/ntoskrnl.exe.spec
+index b73d8952928..c870f24e5f6 100644
+--- a/dlls/ntoskrnl.exe/ntoskrnl.exe.spec
++++ b/dlls/ntoskrnl.exe/ntoskrnl.exe.spec
+@@ -52,6 +52,7 @@
+ @ stdcall -fastcall IofCompleteRequest(ptr long)
+ @ stdcall -arch=!i386 KeAcquireInStackQueuedSpinLock(ptr ptr)
+ @ stdcall -fastcall KeAcquireInStackQueuedSpinLockAtDpcLevel(ptr ptr)
++@ stdcall -fastcall KeAcquireQueuedSpinLock(long)
+ @ stdcall -fastcall KeAcquireGuardedMutexUnsafe(ptr)
+ @ stdcall -fastcall KeAcquireGuardedMutex(ptr)
+ @ stdcall KeEnterGuardedRegion()
+@@ -60,6 +61,7 @@
+ @ stdcall KeLeaveGuardedRegion()
+ @ stdcall -arch=!i386 KeReleaseInStackQueuedSpinLock(ptr)
+ @ stdcall -fastcall KeReleaseInStackQueuedSpinLockFromDpcLevel(ptr)
++@ stdcall -fastcall KeReleaseQueuedSpinLock(long long)
+ @ stdcall -fastcall KeReleaseGuardedMutexUnsafe(ptr)
+ @ stdcall -fastcall KeReleaseGuardedMutex(ptr)
+ @ stub KeSetTimeUpdateNotifyRoutine
+diff --git a/dlls/ntoskrnl.exe/sync.c b/dlls/ntoskrnl.exe/sync.c
+index 6cc29c50b1f..98498f54bc0 100644
+--- a/dlls/ntoskrnl.exe/sync.c
++++ b/dlls/ntoskrnl.exe/sync.c
+@@ -37,6 +37,61 @@ enum object_type
+     TYPE_AUTO_TIMER = 9,
+ };
+ 
++KSPIN_LOCK KiDispatcherLock = 0;
++KSPIN_LOCK KiQueueExpansionLock = 0;
++KSPIN_LOCK MmPfnLock = 0;
++KSPIN_LOCK MmSystemSpaceLock = 0;
++KSPIN_LOCK CcBcbSpinLock = 0;
++KSPIN_LOCK CcMasterSpinLock = 0;
++KSPIN_LOCK CcVacbSpinLock = 0;
++KSPIN_LOCK CcWorkQueueSpinLock = 0;
++KSPIN_LOCK NonPagedPoolLock = 0;
++KSPIN_LOCK MmNonPagedPoolLock = 0;
++KSPIN_LOCK IopCancelSpinLock = 0;
++KSPIN_LOCK IopVpbSpinLock = 0;
++KSPIN_LOCK IopDatabaseLock = 0;
++KSPIN_LOCK IopCompletionLock = 0;
++KSPIN_LOCK NtfsStructLock = 0;
++KSPIN_LOCK AfdWorkQueueSpinLock = 0;
++KSPIN_LOCK KiUnusedSpinLock = 0;
++KSPIN_LOCK KiTimerTableLock[16] = {};
++KSPIN_LOCK_QUEUE g_LockQueue[33] =
++{
++    { NULL, &KiDispatcherLock },
++    { NULL, &KiQueueExpansionLock },
++    { NULL, &MmPfnLock },
++    { NULL, &MmSystemSpaceLock },
++    { NULL, &CcBcbSpinLock },
++    { NULL, &CcMasterSpinLock },
++    { NULL, &CcVacbSpinLock },
++    { NULL, &CcWorkQueueSpinLock },
++    { NULL, &NonPagedPoolLock },
++    { NULL, &MmNonPagedPoolLock },
++    { NULL, &IopCancelSpinLock },
++    { NULL, &IopVpbSpinLock },
++    { NULL, &IopDatabaseLock },
++    { NULL, &IopCompletionLock },
++    { NULL, &NtfsStructLock },
++    { NULL, &AfdWorkQueueSpinLock },
++    { NULL, &KiUnusedSpinLock },
++    { NULL, KiTimerTableLock + 0 },
++    { NULL, KiTimerTableLock + 1 },
++    { NULL, KiTimerTableLock + 2 },
++    { NULL, KiTimerTableLock + 3 },
++    { NULL, KiTimerTableLock + 4 },
++    { NULL, KiTimerTableLock + 5 },
++    { NULL, KiTimerTableLock + 6 },
++    { NULL, KiTimerTableLock + 7 },
++    { NULL, KiTimerTableLock + 8 },
++    { NULL, KiTimerTableLock + 9 },
++    { NULL, KiTimerTableLock + 10 },
++    { NULL, KiTimerTableLock + 11 },
++    { NULL, KiTimerTableLock + 12 },
++    { NULL, KiTimerTableLock + 13 },
++    { NULL, KiTimerTableLock + 14 },
++    { NULL, KiTimerTableLock + 15 },
++};
++
+ DECLARE_CRITICAL_SECTION(sync_cs);
+ 
+ /***********************************************************************
+@@ -681,6 +736,27 @@ void FASTCALL KeReleaseInStackQueuedSpinLockFromDpcLevel( KLOCK_QUEUE_HANDLE *qu
+     InterlockedExchangePointer( (void **)&next->Lock, (KSPIN_LOCK *)((ULONG_PTR)lock | QUEUED_SPINLOCK_OWNED) );
+ }
+ 
++/***********************************************************************
++ *           KeAcquireQueuedSpinLock  (NTOSKRNL.EXE.@)
++ */
++DEFINE_FASTCALL1_WRAPPER( KeAcquireQueuedSpinLock )
++KIRQL FASTCALL KeAcquireQueuedSpinLock( ULONG LockNumber )
++{
++    if (LockNumber < ARRAYSIZE(g_LockQueue))
++        KeAcquireSpinLockAtDpcLevel( g_LockQueue[LockNumber].Lock );
++    return 0;
++}
++
++/***********************************************************************
++ *           KeReleaseQueuedSpinLock  (NTOSKRNL.EXE.@)
++ */
++DEFINE_FASTCALL1_WRAPPER( KeReleaseQueuedSpinLock )
++VOID FASTCALL KeReleaseQueuedSpinLock( ULONG LockNumber, KIRQL OldIrql )
++{
++    if (LockNumber < ARRAYSIZE(g_LockQueue))
++        KeReleaseSpinLockFromDpcLevel( g_LockQueue[LockNumber].Lock );
++}
++
+ #ifndef __i386__
+ /***********************************************************************
+  *           KeReleaseSpinLock (NTOSKRNL.EXE.@)
+diff --git a/include/ddk/wdm.h b/include/ddk/wdm.h
+index b6f37f60529..62516f87dcd 100644
+--- a/include/ddk/wdm.h
++++ b/include/ddk/wdm.h
+@@ -1942,6 +1942,8 @@ NTSTATUS  WINAPI IoSetDevicePropertyData(DEVICE_OBJECT*,const DEVPROPKEY*,LCID,U
+ NTSTATUS  WINAPI IoWMIRegistrationControl(PDEVICE_OBJECT,ULONG);
+ 
+ void    FASTCALL KeAcquireInStackQueuedSpinLockAtDpcLevel(KSPIN_LOCK*,KLOCK_QUEUE_HANDLE*);
++KIRQL   FASTCALL KeAcquireQueuedSpinLock(ULONG);
++VOID    FASTCALL KeReleaseQueuedSpinLock(ULONG,KIRQL);
+ #ifdef __i386__
+ void      WINAPI KeAcquireSpinLock(KSPIN_LOCK*,KIRQL*);
+ #else
