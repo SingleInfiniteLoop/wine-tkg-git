@@ -6,8 +6,8 @@ index 811f04b9539..1ff9b287d21 100644
  void wg_sample_queue_destroy(struct wg_sample_queue *queue);
  void wg_sample_queue_flush(struct wg_sample_queue *queue, bool all);
  
--wg_parser_t wg_parser_create(bool output_compressed);
-+wg_parser_t wg_parser_create(enum wg_parser_type type, bool output_compressed);
+-wg_parser_t wg_parser_create(UINT32 flags); /* see wg_parser_create_flag */
++wg_parser_t wg_parser_create(enum wg_parser_type type, UINT32 flags); /* see wg_parser_create_flag */
  void wg_parser_destroy(wg_parser_t parser);
  
  HRESULT wg_parser_connect(wg_parser_t parser, uint64_t file_size, const WCHAR *uri);
@@ -19,13 +19,13 @@ index ca8518ab3d0..a39293c8f9d 100644
      return E_NOTIMPL;
  }
  
--wg_parser_t wg_parser_create(bool output_compressed)
-+wg_parser_t wg_parser_create(enum wg_parser_type type, bool output_compressed)
+-wg_parser_t wg_parser_create(UINT32 flags)
++wg_parser_t wg_parser_create(enum wg_parser_type type, UINT32 flags)
  {
      struct wg_parser_create_params params =
      {
 +        .type = type,
-         .output_compressed = output_compressed,
+         .flags = flags,
          .err_on = ERR_ON(quartz),
          .warn_on = WARN_ON(quartz),
 diff --git a/dlls/winegstreamer/media_source.c b/dlls/winegstreamer/media_source.c
@@ -61,8 +61,8 @@ index ca8518ab3d0..a39293c8f9d 100644
      if (FAILED(hr = MFAllocateWorkQueue(&object->async_commands_queue)))
          goto fail;
  
--    if (!(parser = wg_parser_create(FALSE)))
-+    if (!(parser = wg_parser_create(context->type, FALSE)))
+-    if (!(parser = wg_parser_create(WG_PARSER_CREATE_FLAG_NONE)))
++    if (!(parser = wg_parser_create(context->type, WG_PARSER_CREATE_FLAG_NONE)))
      {
          hr = E_OUTOFMEMORY;
          goto fail;
@@ -79,12 +79,12 @@ diff --git a/dlls/winegstreamer/quartz_parser.c b/dlls/winegstreamer/quartz_pars
 index 32eb6e1a4a0..f82f555f6b8 100644
 --- a/dlls/winegstreamer/quartz_parser.c
 +++ b/dlls/winegstreamer/quartz_parser.c
-@@ -1659,7 +1659,7 @@ static HRESULT parser_create(BOOL output_compressed, struct parser **parser)
+@@ -1659,7 +1659,7 @@ static HRESULT parser_create(UINT32 flags, struct parser **parser)
  
-     object->output_compressed = output_compressed;
+     object->output_compressed = flags & WG_PARSER_CREATE_FLAG_OUTPUT_COMPRESSED;
  
--    if (!(object->wg_parser = wg_parser_create(output_compressed)))
-+    if (!(object->wg_parser = wg_parser_create(WG_PARSER_DECODEBIN, output_compressed)))
+-    if (!(object->wg_parser = wg_parser_create(flags)))
++    if (!(object->wg_parser = wg_parser_create(WG_PARSER_DECODEBIN, flags)))
      {
          free(object);
          return E_OUTOFMEMORY;
@@ -110,7 +110,7 @@ index 4b15168ae62..2045f3b65ff 100644
  {
      wg_parser_t parser;
 +    enum wg_parser_type type;
-     UINT8 output_compressed;
+     UINT32 flags;
      UINT8 err_on;
      UINT8 warn_on;
 diff --git a/dlls/winegstreamer/wg_parser.c b/dlls/winegstreamer/wg_parser.c
@@ -181,9 +181,9 @@ index 5eb2f174a5a..7326cbc27cb 100644
      pthread_cond_init(&parser->read_cond, NULL);
      pthread_cond_init(&parser->read_done_cond, NULL);
 +    parser->init_gst = init_funcs[params->type];
-     parser->output_compressed = params->output_compressed;
+     parser->output_compressed = params->flags & WG_PARSER_CREATE_FLAG_OUTPUT_COMPRESSED;
+     parser->pts_rebased = params->flags & WG_PARSER_CREATE_FLAG_PTS_REBASED;
      parser->err_on = params->err_on;
-     parser->warn_on = params->warn_on;
 diff --git a/dlls/winegstreamer/wm_reader.c b/dlls/winegstreamer/wm_reader.c
 index 1eb9d2a245f..41735a85335 100644
 --- a/dlls/winegstreamer/wm_reader.c
@@ -192,17 +192,18 @@ index 1eb9d2a245f..41735a85335 100644
      HRESULT hr;
      WORD i;
  
--    if (!(wg_parser = wg_parser_create(FALSE)))
-+    if (!(wg_parser = wg_parser_create(WG_PARSER_DECODEBIN, FALSE)))
+-    if (!(wg_parser = wg_parser_create(WG_PARSER_CREATE_FLAG_NONE)))
++    if (!(wg_parser = wg_parser_create(WG_PARSER_DECODEBIN, WG_PARSER_CREATE_FLAG_NONE)))
          return E_OUTOFMEMORY;
  
      reader->wg_parser = wg_parser;
-@@ -1557,7 +1557,7 @@ static HRESULT reinit_stream(struct wm_reader *reader, bool read_compressed)
+@@ -1557,7 +1557,8 @@ static HRESULT reinit_stream(struct wm_reader *reader, bool read_compressed)
      wg_parser_destroy(reader->wg_parser);
      reader->wg_parser = 0;
  
--    if (!(wg_parser = wg_parser_create(read_compressed)))
-+    if (!(wg_parser = wg_parser_create(WG_PARSER_DECODEBIN, read_compressed)))
+-    if (!(wg_parser = wg_parser_create(read_compressed ? WG_PARSER_CREATE_FLAG_OUTPUT_COMPRESSED : WG_PARSER_CREATE_FLAG_NONE)))
++    if (!(wg_parser = wg_parser_create(WG_PARSER_DECODEBIN,
++                                       read_compressed ? WG_PARSER_CREATE_FLAG_OUTPUT_COMPRESSED : WG_PARSER_CREATE_FLAG_NONE)))
          return E_OUTOFMEMORY;
  
      reader->wg_parser = wg_parser;
