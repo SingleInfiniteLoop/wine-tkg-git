@@ -354,4 +354,9 @@ EOM
  
 EOM
     fi
+    patch "${srcdir}"/"${_stgsrcdir}"/staging/upstream-commit << 'EOP'
+@@ -1 +1 @@
+-8f8792fc857ba609b13c6d63839034e0576b0c9f
++788d90c4e1d628fab6672623f0c8094b984ea2fa
+EOP
 fi
