@@ -20,12 +20,12 @@ index c1e6b588dcb..8d062ffdda0 100644
 +++ b/dlls/ntdll/unix/loader.c
 @@ -1858,6 +1858,7 @@ static void start_main_thread(void)
  {
-     TEB *teb = virtual_alloc_first_teb();
+     struct thread_data *data = virtual_alloc_first_thread_data();
  
 +    signal_init_threading();
-     dbg_init();
-     startup_info_size = server_init_process();
+     server_init_process( data );
      hacks_init();
+     fsync_init();
 diff --git a/dlls/ntdll/unix/signal_arm.c b/dlls/ntdll/unix/signal_arm.c
 index 60b34c2d8bd..f28f5775384 100644
 --- a/dlls/ntdll/unix/signal_arm.c
