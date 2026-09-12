@@ -108,7 +108,7 @@ index bf3d6c34f14..fc8165f2828 100644
  
  #endif /* End architecture specific feature detection for CPUs */
  
-+static void fill_cpu_override(unsigned int host_cpu_count)
++static void fill_cpu_override(void)
 +{
 +    const char *env_override = getenv("WINE_CPU_TOPOLOGY");
 +    unsigned int i;
@@ -160,10 +160,10 @@ index bf3d6c34f14..fc8165f2828 100644
 +        cpu_override.mapping.host_cpu_id[i] = strtol(s, &next, 10);
 +        if (next == s)
 +            goto error;
-+        if (cpu_override.mapping.host_cpu_id[i] >= host_cpu_count)
++        if (cpu_override.mapping.host_cpu_id[i] >= cpu_count)
 +        {
-+            ERR("Invalid host CPU index %u (host_cpu_count %u).\n",
-+                    cpu_override.mapping.host_cpu_id[i], host_cpu_count);
++            ERR("Invalid host CPU index %u (cpu_count %u).\n",
++                    cpu_override.mapping.host_cpu_id[i], cpu_count);
 +            goto error;
 +        }
 +        s = next;
@@ -346,16 +346,14 @@ index bf3d6c34f14..fc8165f2828 100644
      }
      fclose(fcpu_list);
  
-@@ -1141,7 +1429,11 @@ void init_cpu_info(void)
-     num = 1;
+@@ -1141,6 +1429,10 @@ void init_cpu_info(void)
+ #else
      FIXME("Detecting the number of processors is not supported.\n");
  #endif
--    peb->NumberOfProcessors = num;
++    fill_cpu_override();
 +
-+    fill_cpu_override(num);
-+
-+    peb->NumberOfProcessors = cpu_override.mapping.cpu_count
-+            ? cpu_override.mapping.cpu_count : num;
++    if (cpu_override.mapping.cpu_count > 0)
++        cpu_count = cpu_override.mapping.cpu_count;
      init_cpu_model();
      get_random( &process_cookie, sizeof(process_cookie) );
  }
