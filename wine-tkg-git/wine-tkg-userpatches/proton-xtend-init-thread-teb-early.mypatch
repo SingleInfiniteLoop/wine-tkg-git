@@ -7,11 +7,11 @@ index 81e00dcb03a..6b2fbdd9e05 100644
      init_cpu_info();
      init_files();
 +#if defined(__x86_64__) || defined(__i386__)
-+    set_thread_teb( teb );
++    set_thread_teb( data->teb );
 +#endif
      init_startup_info();
+     dbg_init();
      *(ULONG_PTR *)&peb->CloudFileFlags = get_image_address();
-     set_load_order_app_name( main_wargv[0] );
 diff --git a/dlls/ntdll/unix/signal_i386.c b/dlls/ntdll/unix/signal_i386.c
 index 7b6f0f1ee8c..a370ddf30a8 100644
 --- a/dlls/ntdll/unix/signal_i386.c
