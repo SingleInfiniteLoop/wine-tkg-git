@@ -1,0 +1,298 @@
+From 2e4dee62a9345080f42d6649298485a2f870af5c Mon Sep 17 00:00:00 2001
+From: Infinite Loop <teardown@inbox.ru>
+Date: Sat, 12 Sep 2026 00:54:42 +0000
+Subject: [PATCH] Revert "ntdll: Allocate the initial TEB after the main image
+ is loaded."
+
+This reverts commit c7d8f72aa896320ab5ba31647b68257a11a1e070.
+---
+ dlls/ntdll/unix/env.c          | 19 ++++++++++++++++---
+ dlls/ntdll/unix/file.c         |  2 +-
+ dlls/ntdll/unix/loader.c       |  1 +
+ dlls/ntdll/unix/process.c      |  6 ++----
+ dlls/ntdll/unix/server.c       |  9 ++++++++-
+ dlls/ntdll/unix/thread.c       | 19 +++++++++++++++++++
+ dlls/ntdll/unix/unix_private.h |  1 +
+ dlls/ntdll/unix/virtual.c      | 28 ++++++----------------------
+ 8 files changed, 54 insertions(+), 31 deletions(-)
+
+diff --git a/dlls/ntdll/unix/env.c b/dlls/ntdll/unix/env.c
+index a7c230a28ad..8740041328e 100644
+--- a/dlls/ntdll/unix/env.c
++++ b/dlls/ntdll/unix/env.c
+@@ -1830,9 +1830,6 @@ static void *build_wow64_parameters( const RTL_USER_PROCESS_PARAMETERS *params )
+  */
+ static void init_peb( RTL_USER_PROCESS_PARAMETERS *params, void *module, BOOL debugged )
+ {
+-    virtual_alloc_first_teb();
+-    virtual_set_large_address_space();
+-
+     peb->ImageBaseAddress           = module;
+     peb->ProcessParameters          = params;
+     peb->NumberOfProcessors         = cpu_count;
+@@ -1845,6 +1842,18 @@ static void init_peb( RTL_USER_PROCESS_PARAMETERS *params, void *module, BOOL de
+     peb->ImageSubSystemMinorVersion = main_image_info.MinorSubsystemVersion;
+     peb->SessionId                  = session_id;
+ 
++#ifdef _WIN64
++    if (!is_machine_64bit( main_image_info.Machine ))
++    {
++        struct thread_data *data = get_thread_data();
++        data->teb->WowTebOffset = teb_offset;
++        data->teb->Tib.ExceptionList = (void *)((char *)data->teb + teb_offset);
++        wow_peb = (PEB32 *)((char *)peb + page_size);
++        set_thread_id( data );
++    }
++#endif
++
++    virtual_set_large_address_space();
+     load_global_options( &params->ImagePathName, debugged );
+ 
+     if (wow_peb)
+@@ -1888,6 +1897,9 @@ static RTL_USER_PROCESS_PARAMETERS *build_initial_params( void **module )
+     WCHAR *curdir = get_initial_directory();
+     UNICODE_STRING nt_name;
+     NTSTATUS status;
++    TEB64 *teb64 = get_teb64( NtCurrentTeb() );
++
++    if (teb64) teb64->TlsSlots[WOW64_TLS_FILESYSREDIR] = TRUE;
+ 
+     /* store the initial PATH value */
+     path = get_env_var( env, env_pos, pathW, 4 );
+@@ -1942,6 +1954,7 @@ static RTL_USER_PROCESS_PARAMETERS *build_initial_params( void **module )
+     else
+     {
+         rebuild_argv();
++        if (teb64) teb64->TlsSlots[WOW64_TLS_FILESYSREDIR] = FALSE;
+     }
+ 
+     main_wargv = build_wargv( get_dos_path( nt_name.Buffer ));
+diff --git a/dlls/ntdll/unix/file.c b/dlls/ntdll/unix/file.c
+index b539b7edc2c..b32ca886e36 100644
+--- a/dlls/ntdll/unix/file.c
++++ b/dlls/ntdll/unix/file.c
+@@ -3272,7 +3272,7 @@ void init_files(void)
+     HANDLE key;
+ 
+ #ifndef _WIN64
+-    if (is_machine_64bit( native_machine )) init_redirects();
++    if (is_old_wow64()) init_redirects();
+ #endif
+     /* a couple of directories that we don't want to return in directory searches */
+     ignore_file( config_dir );
+diff --git a/dlls/ntdll/unix/loader.c b/dlls/ntdll/unix/loader.c
+index abeb0bd3a63..f9c3117f201 100644
+--- a/dlls/ntdll/unix/loader.c
++++ b/dlls/ntdll/unix/loader.c
+@@ -1862,6 +1862,7 @@ static void start_main_thread(void)
+ {
+     struct thread_data *data = virtual_alloc_first_thread_data();
+ 
++    virtual_alloc_first_teb();
+     signal_init_threading();
+     server_init_process( data );
+     hacks_init();
+diff --git a/dlls/ntdll/unix/process.c b/dlls/ntdll/unix/process.c
+index 9dad6c38289..d234b204817 100644
+--- a/dlls/ntdll/unix/process.c
++++ b/dlls/ntdll/unix/process.c
+@@ -419,8 +419,7 @@ static NTSTATUS spawn_process( const RTL_USER_PROCESS_PARAMETERS *params, int so
+     {
+         if (!(pid = fork()))  /* grandchild */
+         {
+-            if ((peb && peb->ProcessParameters &&
+-                 params->ProcessGroupId != peb->ProcessParameters->ProcessGroupId) ||
++            if ((peb->ProcessParameters && params->ProcessGroupId != peb->ProcessParameters->ProcessGroupId) ||
+                 params->ConsoleHandle == CONSOLE_HANDLE_ALLOC ||
+                 params->ConsoleHandle == CONSOLE_HANDLE_ALLOC_NO_WINDOW ||
+                 params->ConsoleHandle == NULL)
+@@ -591,8 +590,7 @@ static NTSTATUS fork_and_exec( OBJECT_ATTRIBUTES *attr, const char *unix_name, i
+         {
+             close( fd[0] );
+ 
+-            if ((peb && peb->ProcessParameters &&
+-                 params->ProcessGroupId != peb->ProcessParameters->ProcessGroupId) ||
++            if ((peb->ProcessParameters && params->ProcessGroupId != peb->ProcessParameters->ProcessGroupId) ||
+                 params->ConsoleHandle == CONSOLE_HANDLE_ALLOC ||
+                 params->ConsoleHandle == CONSOLE_HANDLE_ALLOC_NO_WINDOW ||
+                 params->ConsoleHandle == NULL)
+diff --git a/dlls/ntdll/unix/server.c b/dlls/ntdll/unix/server.c
+index fa9138d2bf6..700cbd20487 100644
+--- a/dlls/ntdll/unix/server.c
++++ b/dlls/ntdll/unix/server.c
+@@ -1715,6 +1715,11 @@ void server_init_process( struct thread_data *data )
+     {
+         if (arch && !strcmp( arch, "win32" ))
+             fatal_error( "WINEARCH set to win32 but '%s' is a 64-bit installation.\n", config_dir );
++#ifndef _WIN64
++        data->teb->GdiBatchCount = PtrToUlong( (char *)data->teb - teb_offset );
++        data->teb->WowTebOffset  = -teb_offset;
++        wow_peb = (PEB64 *)((char *)peb - page_size);
++#endif
+     }
+     else
+     {
+@@ -1724,6 +1729,8 @@ void server_init_process( struct thread_data *data )
+             fatal_error( "WINEARCH set to %s but '%s' is a 32-bit installation.\n", arch, config_dir );
+     }
+ 
++    set_thread_id( data );
++
+     for (i = 0; i < supported_machines_count; i++)
+         if (supported_machines[i] == current_machine) return;
+ 
+@@ -1968,7 +1975,7 @@ NTSTATUS WINAPI NtClose( HANDLE handle )
+     if (fd != -1) close( fd );
+ 
+     if (ret != STATUS_INVALID_HANDLE || !handle) return ret;
+-    if (!peb || !peb->BeingDebugged) return ret;
++    if (!peb->BeingDebugged) return ret;
+     if (!NtQueryInformationProcess( NtCurrentProcess(), ProcessDebugPort, &port, sizeof(port), NULL) && port)
+     {
+         struct thread_data *data = get_thread_data();
+diff --git a/dlls/ntdll/unix/thread.c b/dlls/ntdll/unix/thread.c
+index b06ea920703..5e8e2a07102 100644
+--- a/dlls/ntdll/unix/thread.c
++++ b/dlls/ntdll/unix/thread.c
+@@ -1170,6 +1170,24 @@ void *get_cpu_area( struct thread_data *data, USHORT machine )
+ }
+ 
+ 
++/***********************************************************************
++ *           set_thread_id
++ */
++void set_thread_id( struct thread_data *data )
++{
++    TEB *teb = data->teb;
++    WOW_TEB *wow_teb = get_wow_teb( teb );
++
++    teb->RealClientId = teb->ClientId = make_client_id( pid, data->tid );
++    if (wow_teb)
++    {
++        wow_teb->ClientId.UniqueProcess = pid;
++        wow_teb->ClientId.UniqueThread  = data->tid;
++        wow_teb->RealClientId = wow_teb->ClientId;
++    }
++}
++
++
+ /***********************************************************************
+  *           init_thread_stack
+  */
+@@ -1439,6 +1457,7 @@ NTSTATUS WINAPI NtCreateThreadEx( HANDLE *handle, ACCESS_MASK access, OBJECT_ATT
+ 
+     if ((status = virtual_alloc_teb( data ))) goto done;
+     teb = data->teb;
++    set_thread_id( data );
+ 
+     if ((status = init_thread_stack( teb, get_zero_bits_limit( zero_bits ), stack_reserve, stack_commit )))
+         goto done;
+diff --git a/dlls/ntdll/unix/unix_private.h b/dlls/ntdll/unix/unix_private.h
+index d1b59b0094f..994512f1bcc 100644
+--- a/dlls/ntdll/unix/unix_private.h
++++ b/dlls/ntdll/unix/unix_private.h
+@@ -287,6 +287,7 @@ extern void copy_xstate( XSAVE_AREA_HEADER *dst, XSAVE_AREA_HEADER *src, UINT64
+ extern void set_process_instrumentation_callback( void *callback );
+ 
+ extern void *get_cpu_area( struct thread_data *data, USHORT machine );
++extern void set_thread_id( struct thread_data *data );
+ extern NTSTATUS init_thread_stack( TEB *teb, ULONG_PTR limit, SIZE_T reserve_size, SIZE_T commit_size );
+ extern void DECLSPEC_NORETURN abort_thread( int status );
+ extern void DECLSPEC_NORETURN abort_process( int status );
+diff --git a/dlls/ntdll/unix/virtual.c b/dlls/ntdll/unix/virtual.c
+index e47bde7e555..f6597a03f66 100644
+--- a/dlls/ntdll/unix/virtual.c
++++ b/dlls/ntdll/unix/virtual.c
+@@ -3960,7 +3960,7 @@ NTSTATUS virtual_relocate_module( void *module )
+ 
+ 
+ /* set some initial values in a new TEB */
+-static TEB *init_teb( void *ptr, DWORD tid )
++static TEB *init_teb( void *ptr, BOOL is_wow )
+ {
+     TEB *teb;
+     TEB64 *teb64 = ptr;
+@@ -3972,40 +3972,31 @@ static TEB *init_teb( void *ptr, DWORD tid )
+     teb32->Tib.Self = PtrToUlong( teb32 );
+     teb32->Tib.ExceptionList = ~0u;
+     teb32->Tib.FiberData = 0x1e00;
+-    teb32->ClientId.UniqueProcess = pid;
+-    teb32->ClientId.UniqueThread  = tid;
+     teb32->ActivationContextStackPointer = PtrToUlong( &teb32->ActivationContextStack );
+     teb32->ActivationContextStack.FrameListCache.Flink =
+         teb32->ActivationContextStack.FrameListCache.Blink =
+             PtrToUlong( &teb32->ActivationContextStack.FrameListCache );
+     teb32->StaticUnicodeString.Buffer = PtrToUlong( teb32->StaticUnicodeBuffer );
+     teb32->StaticUnicodeString.MaximumLength = sizeof( teb32->StaticUnicodeBuffer );
+-    teb32->RealClientId  = teb32->ClientId;
+     teb32->GdiBatchCount = PtrToUlong( teb64 );
+     teb32->WowTebOffset  = -teb_offset;
+-    if (is_wow64())
+-    {
+-        teb64->Tib.ExceptionList = PtrToUlong( teb32 );
+-        teb64->WowTebOffset = teb_offset;
+-    }
++    if (is_wow) teb64->WowTebOffset = teb_offset;
+ #else
+     teb = (TEB *)teb32;
+     teb32->Tib.ExceptionList = ~0u;
++    teb32->Tib.FiberData = 0x1e00;
+     teb64->Peb = PtrToUlong( (char *)peb - page_size );
+     teb64->Tib.Self = PtrToUlong( teb64 );
+     teb64->Tib.ExceptionList = PtrToUlong( teb32 );
+     teb64->Tib.FiberData = 0x1e00;
+-    teb64->ClientId.UniqueProcess = pid;
+-    teb64->ClientId.UniqueThread  = tid;
+     teb64->ActivationContextStackPointer = PtrToUlong( &teb64->ActivationContextStack );
+     teb64->ActivationContextStack.FrameListCache.Flink =
+         teb64->ActivationContextStack.FrameListCache.Blink =
+             PtrToUlong( &teb64->ActivationContextStack.FrameListCache );
+     teb64->StaticUnicodeString.Buffer = PtrToUlong( teb64->StaticUnicodeBuffer );
+     teb64->StaticUnicodeString.MaximumLength = sizeof( teb64->StaticUnicodeBuffer );
+-    teb64->RealClientId = teb64->ClientId;
+     teb64->WowTebOffset = teb_offset;
+-    if (is_wow64())
++    if (is_wow)
+     {
+         teb32->GdiBatchCount = PtrToUlong( teb64 );
+         teb32->WowTebOffset  = -teb_offset;
+@@ -4015,12 +4006,10 @@ static TEB *init_teb( void *ptr, DWORD tid )
+     teb->Tib.Self = &teb->Tib;
+     teb->Tib.StackBase = (void *)~0ul;
+     teb->Tib.FiberData = (void *)0x1e00;
+-    teb->ClientId = make_client_id( pid, tid );
+     teb->ActivationContextStackPointer = &teb->ActivationContextStack;
+     InitializeListHead( &teb->ActivationContextStack.FrameListCache );
+     teb->StaticUnicodeString.Buffer = teb->StaticUnicodeBuffer;
+     teb->StaticUnicodeString.MaximumLength = sizeof(teb->StaticUnicodeBuffer);
+-    teb->RealClientId = teb->ClientId;
+     return teb;
+ }
+ 
+@@ -4082,13 +4071,8 @@ void virtual_alloc_first_teb(void)
+     teb_block_pos = 30;
+     ptr = (char *)teb_block + 30 * block_size;
+     peb = (PEB *)((char *)ptr + block_size + (is_win64 ? 0 : page_size));
+-#ifdef _WIN64
+-    if (!is_machine_64bit( main_image_info.Machine )) wow_peb = (PEB32 *)((char *)peb + page_size);
+-#else
+-    if (is_machine_64bit( native_machine )) wow_peb = (PEB64 *)((char *)peb - page_size);
+-#endif
+     set_protection( view, ptr, 2 * block_size, PAGE_READWRITE );
+-    data->teb = init_teb( ptr, data->tid );
++    data->teb = init_teb( ptr, FALSE );
+     list_add_head( &teb_list, &data->entry );
+     VIRTUAL_DEBUG_DUMP_VIEW( view );
+ }
+@@ -4130,7 +4114,7 @@ NTSTATUS virtual_alloc_teb( struct thread_data *data )
+         NtAllocateVirtualMemory( NtCurrentProcess(), (void **)&ptr, 0, &block_size,
+                                  MEM_COMMIT, PAGE_READWRITE );
+     }
+-    data->teb = init_teb( ptr, data->tid );
++    data->teb = init_teb( ptr, is_wow64() );
+     list_add_head( &teb_list, &data->entry );
+ 
+     if ((status = signal_alloc_thread( data->teb )))
+-- 
+2.43.0
+
