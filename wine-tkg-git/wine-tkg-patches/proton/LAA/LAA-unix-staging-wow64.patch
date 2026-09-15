@@ -94,9 +94,9 @@ diff --git a/dlls/ntdll/unix/virtual.c b/dlls/ntdll/unix/virtual.c
 index 909c089cf07..31fa04fdab3 100644
 --- a/dlls/ntdll/unix/virtual.c
 +++ b/dlls/ntdll/unix/virtual.c
-@@ -4904,6 +4904,24 @@ static void virtual_release_address_space(void)
- 
- #endif  /* _WIN64 */
+@@ -4004,6 +4004,25 @@ static void virtual_release_address_space(void)
+     return data;
+ }
  
 +BOOL WINAPI __wine_needs_override_large_address_aware(void)
 +{
@@ -116,11 +116,12 @@ index 909c089cf07..31fa04fdab3 100644
 +    return (main_image_info.ImageCharacteristics & IMAGE_FILE_LARGE_ADDRESS_AWARE)
 +           || __wine_needs_override_large_address_aware();
 +}
- 
- /***********************************************************************
-  *           virtual_set_large_address_space
-@@ -4915,7 +4933,7 @@ void virtual_set_large_address_space(void)
-                 free_reserved_memory( 0, (char *)0x7ffe0000 );
++
+ /* enable use of a large address space when allowed by the application */
+ static void set_large_address_space(void)
+ {
+@@ -4015,7 +4034,7 @@ static void set_large_address_space(void)
+             if (use_aslr()) free_reserved_memory( 0, (char *)0x7ffe0000 );
  #endif
          }
 -        else if (main_image_info.ImageCharacteristics & IMAGE_FILE_LARGE_ADDRESS_AWARE)
@@ -128,7 +129,7 @@ index 909c089cf07..31fa04fdab3 100644
          {
              user_space_wow_limit = limit_4g - 1;
              /* reserve space for top-down allocations; some apps break if the entire high 2G is available */
-@@ -4924,7 +4942,7 @@ void virtual_set_large_address_space(void)
+@@ -4024,7 +4043,7 @@ static void set_large_address_space(void)
      }
      else
      {
