@@ -781,13 +781,13 @@ index 0fd91182f56..935a66b39fc 100644
      desc.is_hidraw = TRUE;
      if (!desc.product[0] && ioctl(fd, HIDIOCGRAWNAME(sizeof(buffer) - 1), buffer) >= 0)
 +    {
-+        if (sscanf(buffer, "Microsoft X-Box 360 pad %u", &desc.input) != 1) desc.input = -1;
++        if (sscanf(buffer, "Microsoft X-Box 360 pad %u", &desc.interface) != 1) desc.interface = -1;
          ntdll_umbstowcs(buffer, strlen(buffer) + 1, desc.product, ARRAY_SIZE(desc.product));
 -
 +    }
      if (!desc.manufacturer[0]) memcpy(desc.manufacturer, hidraw, sizeof(hidraw));
-     if (!desc.serialnumber[0]) memcpy(desc.serialnumber, zeros, sizeof(zeros));
  
+     if (!(impl = raw_device_create(&hidraw_device_vtbl, sizeof(struct hidraw_device))))
 @@ -1591,13 +1593,28 @@
          impl->button_map[i] = ++impl->button_count;
      }
@@ -2562,7 +2562,7 @@ index eb84f6df830..906d25d196b 100644
      }
 
 -    if (desc.vid == 0x28de && desc.pid == 0x11ff && !strcmp(subsystem, "input"))
-+    if (sscanf(info.name, "Microsoft X-Box 360 pad %u", &desc.input) != 1) desc.input = -1;
++    if (sscanf(info.name, "Microsoft X-Box 360 pad %u", &desc.interface) != 1) desc.interface = -1;
 +    if (desc.vid == 0x28de && desc.pid == 0x11ff)
      {
 -        TRACE("evdev %s: detected steam input virtual controller\n", debugstr_a(devnode));
