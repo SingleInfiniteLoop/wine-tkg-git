@@ -120,7 +120,7 @@ index 909c089cf07..31fa04fdab3 100644
  /* enable use of a large address space when allowed by the application */
  static void set_large_address_space(void)
  {
-@@ -4015,7 +4034,7 @@ static void set_large_address_space(void)
+@@ -4015,15 +4034,15 @@ static void set_large_address_space(void)
              if (use_aslr()) free_reserved_memory( 0, (char *)0x7ffe0000 );
  #endif
          }
@@ -129,15 +129,15 @@ index 909c089cf07..31fa04fdab3 100644
          {
              user_space_wow_limit = limit_4g - 1;
              /* reserve space for top-down allocations; some apps break if the entire high 2G is available */
-@@ -4024,7 +4043,7 @@ static void set_large_address_space(void)
+             reserve_area( (void *)0xfff00000, (void *)0xffff0000 );
+         }
+         else user_space_wow_limit = limit_2g - 1;
      }
-     else
+-    else if (!(main_image_info.ImageCharacteristics & IMAGE_FILE_LARGE_ADDRESS_AWARE))
++    else if (!is_large_address_aware())
      {
--        if (!(main_image_info.ImageCharacteristics & IMAGE_FILE_LARGE_ADDRESS_AWARE)) return;
-+        if (!is_large_address_aware()) return;
-         free_reserved_memory( (char *)0x80000000, address_space_limit );
-     }
-     user_space_limit = working_set_limit = address_space_limit;
+         reserve_area( (void *)limit_2g, host_addr_space_limit );
+         return;
 diff --git a/dlls/wow64/system.c b/dlls/wow64/system.c
 index 5f3056a4179..2f466d869dd 100644
 --- a/dlls/wow64/system.c
