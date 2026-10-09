@@ -2590,9 +2590,9 @@ index eb84f6df830..906d25d196b 100644
 
      if ((impl->is_gamepad = desc.is_gamepad))
 @@ -1719,6 +1704,21 @@
-         close(fd);
-         return;
-     }
+     else if (bus == BUS_USB) desc.bus_type = BUS_TYPE_USB;
+ 
+     if (desc.bus_type == BUS_TYPE_USB) get_device_usb_info(dev, &desc);
 +
 +    if (desc.vid == 0x28de && desc.pid == 0x11ff && !strcmp(subsystem, "input"))
 +        TRACE("evdev %s: detected steam input virtual controller\n", debugstr_a(devnode));
