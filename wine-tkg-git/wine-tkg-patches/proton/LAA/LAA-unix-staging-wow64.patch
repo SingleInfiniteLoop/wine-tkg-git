@@ -120,18 +120,18 @@ index 909c089cf07..31fa04fdab3 100644
  /* enable use of a large address space when allowed by the application */
  static void set_large_address_space(void)
  {
-@@ -4015,15 +4034,15 @@ static void set_large_address_space(void)
-             if (use_aslr()) free_reserved_memory( 0, (char *)0x7ffe0000 );
- #endif
-         }
--        else if (main_image_info.ImageCharacteristics & IMAGE_FILE_LARGE_ADDRESS_AWARE)
-+        else if (is_large_address_aware())
+@@ -4015,7 +4034,7 @@ static void set_large_address_space(void)
+ 
+     if (is_win64)
+     {
+-        if (main_image_info.ImageCharacteristics & IMAGE_FILE_LARGE_ADDRESS_AWARE)
++        if (is_large_address_aware())
          {
              user_space_wow_limit = limit_4g - 1;
-             /* reserve space for top-down allocations; some apps break if the entire high 2G is available */
-             reserve_area( (void *)0xfff00000, (void *)0xffff0000 );
+             /* block a bit of top memory: some apps break if the entire high 2G is available */
+@@ -4027,7 +4046,7 @@ static void set_large_address_space(void)
+             set_mem_area_state( (void *)0x7fff0000, 0x10000, AREA_BLOCKED );
          }
-         else user_space_wow_limit = limit_2g - 1;
      }
 -    else if (!(main_image_info.ImageCharacteristics & IMAGE_FILE_LARGE_ADDRESS_AWARE))
 +    else if (!is_large_address_aware())
