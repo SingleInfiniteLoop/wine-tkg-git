@@ -530,7 +530,7 @@ index 74e6da5bb56..a2b498759a9 100644
 --- a/dlls/ntdll/Makefile.in
 +++ b/dlls/ntdll/Makefile.in
 @@ -48,6 +48,7 @@ SOURCES = \
- 	unix/cdrom.c \
+ 	unix/alpc.c \
  	unix/debug.c \
  	unix/env.c \
 +	unix/esync.c \
