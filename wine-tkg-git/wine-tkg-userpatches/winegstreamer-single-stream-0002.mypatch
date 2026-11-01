@@ -11,9 +11,9 @@ index 949ff1281bb..0e5b6d3513c 100644
      UINT i;
  
 @@ -1443,8 +1444,30 @@ static HRESULT WINAPI media_source_CreatePresentationDescriptor(IMFMediaSource *
+             if (!source->streams[i]->active)
+                 continue;
  
-         for (i = 0; i < source->stream_count; ++i)
-         {
 -            if (FAILED(hr = IMFPresentationDescriptor_SelectStream(*descriptor, i)))
 -                WARN("Failed to select stream %u, hr %#lx\n", i, hr);
 +            struct wg_format format;
