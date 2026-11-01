@@ -906,13 +906,13 @@ index 98af91c47a7..375a0f416a5 100644
  }
 @@ -621,7 +630,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH CreateProcessInternalW( HANDLE token, const WCHAR
  {
-     const struct proc_thread_attr *handle_list = NULL, *job_list = NULL;
+     struct _PROC_THREAD_ATTRIBUTE_LIST *attrs = NULL;
      WCHAR name[MAX_PATH];
 -    WCHAR *p, *tidy_cmdline = cmd_line;
 +    WCHAR *p, *tidy_cmdline = cmd_line, *orig_app_name = NULL;
      RTL_USER_PROCESS_PARAMETERS *params = NULL;
      RTL_USER_PROCESS_INFORMATION rtl_info = { 0 };
-     HANDLE parent = 0, debug = 0;
+     HANDLE debug = 0;
 @@ -680,7 +689,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH CreateProcessInternalW( HANDLE token, const WCHAR
          app_name = name;
      }
