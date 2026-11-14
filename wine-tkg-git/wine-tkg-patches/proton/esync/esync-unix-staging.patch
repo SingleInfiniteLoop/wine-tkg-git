@@ -5436,7 +5436,7 @@ index 6a1b89b0e54..8ba704344cf 100644
 +        close( fd->esync_fd );
  }
  
- /* check if the desired access is possible without violating */
+ static inline bool is_replace_file_disposition( unsigned int disposition )
 @@ -1784,6 +1789,7 @@ static struct fd *alloc_fd_object(void)
      fd->poll_index = -1;
      fd->completion = NULL;
